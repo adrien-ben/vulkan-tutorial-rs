@@ -7,6 +7,10 @@ Vulkan [tutorials][0] written in Rust using [Ash][1].
 Application setup. We don't setup the window system now as it's done in 
 the original tutorial.
 
+## 1.1.2: Instance
+
+Create and destroy the Vulkan instance with required surface extensions.
+
 ## Run it
 
 ```sh
