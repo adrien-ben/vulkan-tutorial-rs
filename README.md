@@ -18,6 +18,10 @@ a debug report callback function after checking that it is available.
 Since we are using the `log` crate, we log the message with the proper log level.
 The callback is detroyed at application termination.
 
+## 1.1.4: Physical devices and queue families
+
+Find a physical device with at least a queue family supporting graphics.
+
 ## Run it
 
 ```sh
