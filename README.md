@@ -43,6 +43,12 @@ the graphics queue from the device.
 - Move validation layers related code to its own module.
 - Disabled validation layers on release build.
 
+### 1.2.1: Window surface
+
+Create the window, the window surface and the presentation queue.
+Update the physical device creation to get a device with presentation support.
+At that point, the code will only work on Windows.
+
 ## Run it
 
 With validation layers:
