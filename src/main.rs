@@ -1,3 +1,4 @@
+mod debug;
 mod util;
 
 use ash::{
@@ -5,37 +6,8 @@ use ash::{
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
 };
 use ash::{vk, Device, Entry, Instance};
-use std::{
-    ffi::{CStr, CString},
-    os::raw::{c_char, c_void},
-};
-
-const ENABLE_VALIDATION_LAYERS: bool = true;
-const REQUIRED_LAYERS: [&'static str; 1] = ["VK_LAYER_LUNARG_standard_validation"];
-
-unsafe extern "system" fn vulkan_debug_callback(
-    flag: vk::DebugReportFlagsEXT,
-    typ: vk::DebugReportObjectTypeEXT,
-    _: u64,
-    _: usize,
-    _: i32,
-    _: *const c_char,
-    p_message: *const c_char,
-    _: *mut c_void,
-) -> u32 {
-    if flag == vk::DebugReportFlagsEXT::DEBUG {
-        log::debug!("{} - {:?}", typ, CStr::from_ptr(p_message));
-    } else if flag == vk::DebugReportFlagsEXT::INFORMATION {
-        log::info!("{} - {:?}", typ, CStr::from_ptr(p_message));
-    } else if flag == vk::DebugReportFlagsEXT::WARNING {
-        log::warn!("{} - {:?}", typ, CStr::from_ptr(p_message));
-    } else if flag == vk::DebugReportFlagsEXT::PERFORMANCE_WARNING {
-        log::warn!("{} - {:?}", typ, CStr::from_ptr(p_message));
-    } else {
-        log::error!("{} - {:?}", typ, CStr::from_ptr(p_message));
-    }
-    vk::FALSE
-}
+use debug::*;
+use std::ffi::{CStr, CString};
 
 struct VulkanApp {
     _entry: Entry,
@@ -52,7 +24,7 @@ impl VulkanApp {
 
         let entry = ash::Entry::new().expect("Failed to create entry.");
         let instance = Self::create_instance(&entry);
-        let debug_report_callback = Self::setup_debug_messenger(&entry, &instance);
+        let debug_report_callback = setup_debug_messenger(&entry, &instance);
         let physical_device = Self::pick_physical_device(&instance);
         let (device, graphics_queue) =
             Self::create_logical_device_with_graphics_queue(&instance, physical_device);
@@ -83,69 +55,20 @@ impl VulkanApp {
             extension_names.push(DebugReport::name().as_ptr());
         }
 
-        let (_layer_names, layer_names_ptrs) = Self::get_layer_names_and_pointers();
+        let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
 
         let mut instance_create_info = vk::InstanceCreateInfo::builder()
             .application_info(&app_info)
             .enabled_extension_names(&extension_names);
         if ENABLE_VALIDATION_LAYERS {
-            Self::check_validation_layer_support(&entry);
+            check_validation_layer_support(&entry);
             instance_create_info = instance_create_info.enabled_layer_names(&layer_names_ptrs);
         }
 
         unsafe { entry.create_instance(&instance_create_info, None).unwrap() }
     }
 
-    fn get_layer_names_and_pointers() -> (Vec<CString>, Vec<*const i8>) {
-        let layer_names = REQUIRED_LAYERS
-            .iter()
-            .map(|name| CString::new(*name).expect("Failed to build CString"))
-            .collect::<Vec<_>>();
-        let layer_names_ptrs = layer_names
-            .iter()
-            .map(|name| name.as_ptr())
-            .collect::<Vec<_>>();
-        (layer_names, layer_names_ptrs)
-    }
-
-    fn check_validation_layer_support(entry: &Entry) {
-        for required in REQUIRED_LAYERS.iter() {
-            let found = entry
-                .enumerate_instance_layer_properties()
-                .unwrap()
-                .iter()
-                .any(|layer| {
-                    let name = unsafe { CStr::from_ptr(layer.layer_name.as_ptr()) };
-                    let name = name.to_str().expect("Failed to get layer name pointer");
-                    required == &name
-                });
-
-            if !found {
-                panic!("Validation layer not supported: {}", required);
-            }
-        }
-    }
-
-    fn setup_debug_messenger(
-        entry: &Entry,
-        instance: &Instance,
-    ) -> Option<(DebugReport, vk::DebugReportCallbackEXT)> {
-        if !ENABLE_VALIDATION_LAYERS {
-            return None;
-        }
-        let create_info = vk::DebugReportCallbackCreateInfoEXT::builder()
-            .flags(vk::DebugReportFlagsEXT::all())
-            .pfn_callback(Some(vulkan_debug_callback))
-            .build();
-        let debug_report = DebugReport::new(entry, instance);
-        let debug_report_callback = unsafe {
-            debug_report
-                .create_debug_report_callback(&create_info, None)
-                .unwrap()
-        };
-        Some((debug_report, debug_report_callback))
-    }
-
+    /// Pick the first physical device that supports graphics queue families.
     fn pick_physical_device(instance: &Instance) -> vk::PhysicalDevice {
         let devices = unsafe { instance.enumerate_physical_devices().unwrap() };
         let device = devices
@@ -164,6 +87,8 @@ impl VulkanApp {
         Self::find_queue_families(instance, device).is_some()
     }
 
+    /// Find a queue family with at least one graphics queue from `device`.
+    /// Return `None` if it could not find one.
     fn find_queue_families(instance: &Instance, device: vk::PhysicalDevice) -> Option<u32> {
         let props = unsafe { instance.get_physical_device_queue_family_properties(device) };
         props
@@ -175,6 +100,8 @@ impl VulkanApp {
             .map(|(index, _)| index as _)
     }
 
+    /// Create the logical device to interact with `device` and a graphics queue.
+    /// Return a tuple containing the logical device and the queue.
     fn create_logical_device_with_graphics_queue(
         instance: &Instance,
         device: vk::PhysicalDevice,
@@ -188,7 +115,7 @@ impl VulkanApp {
 
         let device_features = vk::PhysicalDeviceFeatures::builder().build();
 
-        let (_layer_names, layer_names_ptrs) = Self::get_layer_names_and_pointers();
+        let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
 
         let mut device_create_info_builder = vk::DeviceCreateInfo::builder()
             .queue_create_infos(&queue_create_infos)
