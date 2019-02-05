@@ -11,6 +11,13 @@ the original tutorial.
 
 Create and destroy the Vulkan instance with required surface extensions.
 
+## 1.1.3: Validation layers
+
+Add `VK_LAYER_LUNARG_standard_validation` at instance creation and creates
+a debug report callback function after checking that it is available. 
+Since we are using the `log` crate, we log the message with the proper log level.
+The callback is detroyed at application termination.
+
 ## Run it
 
 ```sh
