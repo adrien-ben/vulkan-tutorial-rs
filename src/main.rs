@@ -2,9 +2,9 @@ mod util;
 
 use ash::{
     extensions::ext::DebugReport,
-    version::{EntryV1_0, InstanceV1_0},
+    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
 };
-use ash::{vk, Entry, Instance};
+use ash::{vk, Device, Entry, Instance};
 use std::{
     ffi::{CStr, CString},
     os::raw::{c_char, c_void},
@@ -42,6 +42,8 @@ struct VulkanApp {
     instance: Instance,
     debug_report_callback: Option<(DebugReport, vk::DebugReportCallbackEXT)>,
     _physical_device: vk::PhysicalDevice,
+    device: Device,
+    _graphics_queue: vk::Queue,
 }
 
 impl VulkanApp {
@@ -52,12 +54,16 @@ impl VulkanApp {
         let instance = Self::create_instance(&entry);
         let debug_report_callback = Self::setup_debug_messenger(&entry, &instance);
         let physical_device = Self::pick_physical_device(&instance);
+        let (device, graphics_queue) =
+            Self::create_logical_device_with_graphics_queue(&instance, physical_device);
 
         Self {
             _entry: entry,
             instance,
             debug_report_callback,
             _physical_device: physical_device,
+            device,
+            _graphics_queue: graphics_queue,
         }
     }
 
@@ -77,14 +83,7 @@ impl VulkanApp {
             extension_names.push(DebugReport::name().as_ptr());
         }
 
-        let layer_names = REQUIRED_LAYERS
-            .iter()
-            .map(|name| CString::new(*name).expect("Failed to build CString"))
-            .collect::<Vec<_>>();
-        let layer_names_ptrs = layer_names
-            .iter()
-            .map(|name| name.as_ptr())
-            .collect::<Vec<_>>();
+        let (_layer_names, layer_names_ptrs) = Self::get_layer_names_and_pointers();
 
         let mut instance_create_info = vk::InstanceCreateInfo::builder()
             .application_info(&app_info)
@@ -95,6 +94,18 @@ impl VulkanApp {
         }
 
         unsafe { entry.create_instance(&instance_create_info, None).unwrap() }
+    }
+
+    fn get_layer_names_and_pointers() -> (Vec<CString>, Vec<*const i8>) {
+        let layer_names = REQUIRED_LAYERS
+            .iter()
+            .map(|name| CString::new(*name).expect("Failed to build CString"))
+            .collect::<Vec<_>>();
+        let layer_names_ptrs = layer_names
+            .iter()
+            .map(|name| name.as_ptr())
+            .collect::<Vec<_>>();
+        (layer_names, layer_names_ptrs)
     }
 
     fn check_validation_layer_support(entry: &Entry) {
@@ -153,7 +164,7 @@ impl VulkanApp {
         Self::find_queue_families(instance, device).is_some()
     }
 
-    fn find_queue_families(instance: &Instance, device: vk::PhysicalDevice) -> Option<usize> {
+    fn find_queue_families(instance: &Instance, device: vk::PhysicalDevice) -> Option<u32> {
         let props = unsafe { instance.get_physical_device_queue_family_properties(device) };
         props
             .iter()
@@ -161,7 +172,41 @@ impl VulkanApp {
             .find(|(_, family)| {
                 family.queue_count > 0 && family.queue_flags.contains(vk::QueueFlags::GRAPHICS)
             })
-            .map(|(index, _)| index)
+            .map(|(index, _)| index as _)
+    }
+
+    fn create_logical_device_with_graphics_queue(
+        instance: &Instance,
+        device: vk::PhysicalDevice,
+    ) -> (Device, vk::Queue) {
+        let queue_family_index = Self::find_queue_families(instance, device).unwrap();
+        let queue_priorities = [1.0f32];
+        let queue_create_infos = [vk::DeviceQueueCreateInfo::builder()
+            .queue_family_index(queue_family_index)
+            .queue_priorities(&queue_priorities)
+            .build()];
+
+        let device_features = vk::PhysicalDeviceFeatures::builder().build();
+
+        let (_layer_names, layer_names_ptrs) = Self::get_layer_names_and_pointers();
+
+        let mut device_create_info_builder = vk::DeviceCreateInfo::builder()
+            .queue_create_infos(&queue_create_infos)
+            .enabled_features(&device_features);
+        if ENABLE_VALIDATION_LAYERS {
+            device_create_info_builder =
+                device_create_info_builder.enabled_layer_names(&layer_names_ptrs)
+        }
+        let device_create_info = device_create_info_builder.build();
+
+        let device = unsafe {
+            instance
+                .create_device(device, &device_create_info, None)
+                .expect("Failed to create logical device.")
+        };
+        let graphics_queue = unsafe { device.get_device_queue(queue_family_index, 0) };
+
+        (device, graphics_queue)
     }
 
     fn run(&mut self) {
@@ -173,6 +218,7 @@ impl Drop for VulkanApp {
     fn drop(&mut self) {
         log::debug!("Dropping application.");
         unsafe {
+            self.device.destroy_device(None);
             if let Some((report, callback)) = self.debug_report_callback.take() {
                 report.destroy_debug_report_callback(callback, None);
             }

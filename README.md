@@ -22,6 +22,11 @@ The callback is detroyed at application termination.
 
 Find a physical device with at least a queue family supporting graphics.
 
+## 1.1.5: Logical device and queues
+
+Create the logical device interfacing with the physical device. Then create
+the graphics queue from the device.
+
 ## Run it
 
 ```sh
