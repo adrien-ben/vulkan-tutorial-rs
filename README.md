@@ -49,6 +49,12 @@ Create the window, the window surface and the presentation queue.
 Update the physical device creation to get a device with presentation support.
 At that point, the code will only work on Windows.
 
+### 1.2.2: Swapchain
+
+Checks for swapchain support and enable device extension for swapchain. Then
+query the swapchain details and choose the right settings. Then create the 
+swapchain and retrieve the swapchain images.
+
 ## Run it
 
 With validation layers:
