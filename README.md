@@ -87,6 +87,10 @@ Create the viewport and scissor info for the pipeline.
 
 Create the rasterizer info for the pipeline.
 
+#### 1.3.3.4: Multisampling
+
+Create the multisampling info for the pipeline.
+
 ## Run it
 
 With validation layers:

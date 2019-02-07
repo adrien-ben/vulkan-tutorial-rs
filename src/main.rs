@@ -458,6 +458,14 @@ impl VulkanApp {
             .depth_bias_slope_factor(0.0)
             .build();
             
+        let _multisampling_create_info = vk::PipelineMultisampleStateCreateInfo::builder()
+            .sample_shading_enable(false)
+            .rasterization_samples(vk::SampleCountFlags::TYPE_1)
+            .min_sample_shading(1.0)
+            // .sample_mask() // null
+            .alpha_to_coverage_enable(false)
+            .alpha_to_one_enable(false)
+            .build();
 
         unsafe {
             device.destroy_shader_module(vertex_shader_module, None);
