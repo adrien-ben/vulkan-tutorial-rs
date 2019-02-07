@@ -91,6 +91,10 @@ Create the rasterizer info for the pipeline.
 
 Create the multisampling info for the pipeline.
 
+#### 1.3.3.5: Color blending
+
+Create color blend attachment and color blend info for the pipeline.
+
 ## Run it
 
 With validation layers:
