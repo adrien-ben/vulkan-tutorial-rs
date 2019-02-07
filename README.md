@@ -79,6 +79,10 @@ This one is huge so it will be split across several commits.
 
 Create the vertex input and input assembly info for the pipeline.
 
+#### 1.3.3.2: Viewports and scissors
+
+Create the viewport and scissor info for the pipeline.
+
 ## Run it
 
 With validation layers:

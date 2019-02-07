@@ -71,7 +71,7 @@ impl VulkanApp {
         let swapchain_image_views =
             Self::create_swapchain_image_views(&device, &images, properties);
 
-        let _pipeline = Self::create_pipeline(&device);
+        let _pipeline = Self::create_pipeline(&device, properties);
 
         Self {
             _event_loop: events_loop,
@@ -407,7 +407,7 @@ impl VulkanApp {
             .collect::<Vec<_>>()
     }
 
-    fn create_pipeline(device: &Device) {
+    fn create_pipeline(device: &Device, swapchain_properties: SwapchainProperties) {
         let vertex_source =
             Self::read_shader_from_file("C:/dev/vulkan-tutorial-ash/shaders/shader.vert.spv");
         let fragment_source =
@@ -424,6 +424,25 @@ impl VulkanApp {
         let _input_assembly_create_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
             .primitive_restart_enable(false)
+            .build();
+
+        let viewport = vk::Viewport {
+            x: 0.0,
+            y: 0.0,
+            width: swapchain_properties.extent.width as _,
+            height: swapchain_properties.extent.height as _,
+            min_depth: 0.0,
+            max_depth: 1.0,
+        };
+        let viewports = [viewport];
+        let scissor = vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent: swapchain_properties.extent,
+        };
+        let scissors = [scissor];
+        let _viewport_create_info = vk::PipelineViewportStateCreateInfo::builder()
+            .viewports(&viewports)
+            .scissors(&scissors)
             .build();
 
         unsafe {
