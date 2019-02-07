@@ -65,6 +65,12 @@ Add `SwapchainProperties` to hold the format, present mode and extent of our swa
 Add a method to build the best properties to `SwapchainSupportDetails`.
 Move these two struct into the `swapchain` module.
 
+### 1.3.2: Shader module
+
+Create the vertex and fragment shaders GLSL source and add a `compile.bat` script
+to compile it into SPIR-V bytecode using `glslangValidator`.
+Load the compiled SPIR-V and create a `ShaderModule` from it.
+
 ## Run it
 
 With validation layers:

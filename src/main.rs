@@ -60,6 +60,7 @@ impl VulkanApp {
                 surface_khr,
                 physical_device,
             );
+
         let (swapchain, swapchain_khr, properties, images) = Self::create_swapchain_and_images(
             &instance,
             physical_device,
@@ -69,6 +70,8 @@ impl VulkanApp {
         );
         let swapchain_image_views =
             Self::create_swapchain_image_views(&device, &images, properties);
+
+        let _pipeline = Self::create_pipeline(&device);
 
         Self {
             _event_loop: events_loop,
@@ -402,6 +405,31 @@ impl VulkanApp {
                 unsafe { device.create_image_view(&create_info, None).unwrap() }
             })
             .collect::<Vec<_>>()
+    }
+
+    fn create_pipeline(device: &Device) {
+        let vertex_source =
+            Self::read_shader_from_file("C:/dev/vulkan-tutorial-ash/shaders/shader.vert.spv");
+        let fragment_source =
+            Self::read_shader_from_file("C:/dev/vulkan-tutorial-ash/shaders/shader.frag.spv");
+
+        let vertex_shader_module = Self::create_shader_module(device, &vertex_source);
+        let fragment_shader_module = Self::create_shader_module(device, &fragment_source);
+
+        unsafe {
+            device.destroy_shader_module(vertex_shader_module, None);
+            device.destroy_shader_module(fragment_shader_module, None);
+        };
+    }
+
+    fn read_shader_from_file<P: AsRef<std::path::Path>>(path: P) -> Vec<u32> {
+        let mut file = std::fs::File::open(path).unwrap();
+        ash::util::read_spv(&mut file).unwrap()
+    }
+
+    fn create_shader_module(device: &Device, code: &[u32]) -> vk::ShaderModule {
+        let create_info = vk::ShaderModuleCreateInfo::builder().code(code).build();
+        unsafe { device.create_shader_module(&create_info, None).unwrap() }
     }
 
     fn run(&mut self) {
