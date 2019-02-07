@@ -55,6 +55,10 @@ Checks for swapchain support and enable device extension for swapchain. Then
 query the swapchain details and choose the right settings. Then create the 
 swapchain and retrieve the swapchain images.
 
+### 1.2.3: Image views
+
+Create the image views to the swapchain images.
+
 ## Run it
 
 With validation layers:

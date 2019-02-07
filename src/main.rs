@@ -33,6 +33,7 @@ struct VulkanApp {
     _images: Vec<vk::Image>,
     _swapchain_image_format: vk::Format,
     _swapchain_extent: vk::Extent2D,
+    swapchain_image_views: Vec<vk::ImageView>,
 }
 
 impl VulkanApp {
@@ -65,6 +66,7 @@ impl VulkanApp {
             &surface,
             surface_khr,
         );
+        let swapchain_image_views = Self::create_swapchain_image_views(&device, &images, format);
 
         Self {
             _event_loop: events_loop,
@@ -83,6 +85,7 @@ impl VulkanApp {
             _images: images,
             _swapchain_image_format: format,
             _swapchain_extent: extent,
+            swapchain_image_views,
         }
     }
 
@@ -422,6 +425,39 @@ impl VulkanApp {
         vk::Extent2D { width, height }
     }
 
+    /// Create one image view for each image of the swapchain.
+    fn create_swapchain_image_views(
+        device: &Device,
+        swapchain_images: &[vk::Image],
+        swapchain_format: vk::Format,
+    ) -> Vec<vk::ImageView> {
+        swapchain_images
+            .into_iter()
+            .map(|image| {
+                let create_info = vk::ImageViewCreateInfo::builder()
+                    .image(*image)
+                    .view_type(vk::ImageViewType::TYPE_2D)
+                    .format(swapchain_format)
+                    .components(vk::ComponentMapping {
+                        r: vk::ComponentSwizzle::IDENTITY,
+                        g: vk::ComponentSwizzle::IDENTITY,
+                        b: vk::ComponentSwizzle::IDENTITY,
+                        a: vk::ComponentSwizzle::IDENTITY,
+                    })
+                    .subresource_range(vk::ImageSubresourceRange {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        base_mip_level: 0,
+                        level_count: 1,
+                        base_array_layer: 0,
+                        layer_count: 1,
+                    })
+                    .build();
+
+                unsafe { device.create_image_view(&create_info, None).unwrap() }
+            })
+            .collect::<Vec<_>>()
+    }
+
     fn run(&mut self) {
         log::debug!("Running application.");
     }
@@ -431,6 +467,9 @@ impl Drop for VulkanApp {
     fn drop(&mut self) {
         log::debug!("Dropping application.");
         unsafe {
+            self.swapchain_image_views
+                .iter()
+                .for_each(|v| self.device.destroy_image_view(*v, None));
             self.swapchain.destroy_swapchain(self.swapchain_khr, None);
             self.device.destroy_device(None);
             self.surface.destroy_surface(self.surface_khr, None);
