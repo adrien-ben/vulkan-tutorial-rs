@@ -71,6 +71,14 @@ Create the vertex and fragment shaders GLSL source and add a `compile.bat` scrip
 to compile it into SPIR-V bytecode using `glslangValidator`.
 Load the compiled SPIR-V and create a `ShaderModule` from it.
 
+### 1.3.3: Fixed functions
+
+This one is huge so it will be split across several commits.
+
+#### 1.3.3.1: Vertex input and input assembly
+
+Create the vertex input and input assembly info for the pipeline.
+
 ## Run it
 
 With validation layers:
