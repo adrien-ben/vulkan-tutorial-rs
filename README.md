@@ -59,6 +59,12 @@ swapchain and retrieve the swapchain images.
 
 Create the image views to the swapchain images.
 
+### 1.2.extra: Refactoring swapchain creation
+
+Add `SwapchainProperties` to hold the format, present mode and extent of our swapchain.
+Add a method to build the best properties to `SwapchainSupportDetails`.
+Move these two struct into the `swapchain` module.
+
 ## Run it
 
 With validation layers:
