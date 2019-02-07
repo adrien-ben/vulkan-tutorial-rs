@@ -83,6 +83,10 @@ Create the vertex input and input assembly info for the pipeline.
 
 Create the viewport and scissor info for the pipeline.
 
+#### 1.3.3.3: Rasterizer
+
+Create the rasterizer info for the pipeline.
+
 ## Run it
 
 With validation layers:
