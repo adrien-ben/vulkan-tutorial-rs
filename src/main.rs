@@ -37,6 +37,7 @@ struct VulkanApp {
     swapchain_image_views: Vec<vk::ImageView>,
     render_pass: vk::RenderPass,
     pipeline_layout: vk::PipelineLayout,
+    pipeline: vk::Pipeline,
 }
 
 impl VulkanApp {
@@ -74,7 +75,7 @@ impl VulkanApp {
             Self::create_swapchain_image_views(&device, &images, properties);
 
         let render_pass = Self::create_render_pass(&device, properties);
-        let layout = Self::create_pipeline(&device, properties);
+        let (pipeline, layout) = Self::create_pipeline(&device, properties, render_pass);
 
         Self {
             _event_loop: events_loop,
@@ -95,6 +96,7 @@ impl VulkanApp {
             swapchain_image_views,
             render_pass,
             pipeline_layout: layout,
+            pipeline,
         }
     }
 
@@ -449,7 +451,8 @@ impl VulkanApp {
     fn create_pipeline(
         device: &Device,
         swapchain_properties: SwapchainProperties,
-    ) -> vk::PipelineLayout {
+        render_pass: vk::RenderPass,
+    ) -> (vk::Pipeline, vk::PipelineLayout) {
         let vertex_source =
             Self::read_shader_from_file("C:/dev/vulkan-tutorial-ash/shaders/shader.vert.spv");
         let fragment_source =
@@ -458,12 +461,25 @@ impl VulkanApp {
         let vertex_shader_module = Self::create_shader_module(device, &vertex_source);
         let fragment_shader_module = Self::create_shader_module(device, &fragment_source);
 
-        let _vertex_input_create_info = vk::PipelineVertexInputStateCreateInfo::builder()
+        let entry_point_name = CString::new("main").unwrap();
+        let vertex_shader_state_info = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(vk::ShaderStageFlags::VERTEX)
+            .module(vertex_shader_module)
+            .name(&entry_point_name)
+            .build();
+        let fragment_shader_state_info = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(vk::ShaderStageFlags::FRAGMENT)
+            .module(fragment_shader_module)
+            .name(&entry_point_name)
+            .build();
+        let shader_states_infos = [vertex_shader_state_info, fragment_shader_state_info];
+
+        let vertex_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
             // .vertex_binding_descriptions() null since vertices are hard coded in the shader
             // .vertex_attribute_descriptions() same here
             .build();
 
-        let _input_assembly_create_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
+        let input_assembly_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
             .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
             .primitive_restart_enable(false)
             .build();
@@ -482,12 +498,12 @@ impl VulkanApp {
             extent: swapchain_properties.extent,
         };
         let scissors = [scissor];
-        let _viewport_create_info = vk::PipelineViewportStateCreateInfo::builder()
+        let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
             .viewports(&viewports)
             .scissors(&scissors)
             .build();
 
-        let _rasterizer_create_info = vk::PipelineRasterizationStateCreateInfo::builder()
+        let rasterizer_info = vk::PipelineRasterizationStateCreateInfo::builder()
             .depth_clamp_enable(false)
             .rasterizer_discard_enable(false)
             .polygon_mode(vk::PolygonMode::FILL)
@@ -500,7 +516,7 @@ impl VulkanApp {
             .depth_bias_slope_factor(0.0)
             .build();
 
-        let _multisampling_create_info = vk::PipelineMultisampleStateCreateInfo::builder()
+        let multisampling_info = vk::PipelineMultisampleStateCreateInfo::builder()
             .sample_shading_enable(false)
             .rasterization_samples(vk::SampleCountFlags::TYPE_1)
             .min_sample_shading(1.0)
@@ -521,24 +537,44 @@ impl VulkanApp {
             .build();
         let color_blend_attachments = [color_blend_attachment];
 
-        let _color_blending_info = vk::PipelineColorBlendStateCreateInfo::builder()
+        let color_blending_info = vk::PipelineColorBlendStateCreateInfo::builder()
             .logic_op_enable(false)
             .logic_op(vk::LogicOp::COPY)
             .attachments(&color_blend_attachments)
             .blend_constants([0.0, 0.0, 0.0, 0.0])
             .build();
 
-        let pipeline_layout = {
-            let pipeline_layout_info = vk::PipelineLayoutCreateInfo::builder()
+        let layout = {
+            let layout_info = vk::PipelineLayoutCreateInfo::builder()
                 // .set_layouts() null since we don't have uniforms in our shaders
                 // .push_constant_ranges
                 .build();
 
-            unsafe {
-                device
-                    .create_pipeline_layout(&pipeline_layout_info, None)
-                    .unwrap()
-            }
+            unsafe { device.create_pipeline_layout(&layout_info, None).unwrap() }
+        };
+
+        let pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
+            .stages(&shader_states_infos)
+            .vertex_input_state(&vertex_input_info)
+            .input_assembly_state(&input_assembly_info)
+            .viewport_state(&viewport_info)
+            .rasterization_state(&rasterizer_info)
+            .multisample_state(&multisampling_info)
+            // .depth_stencil_state() null since don't make use of depth/stencil tests
+            .color_blend_state(&color_blending_info)
+            // .dynamic_state() null since don't have any dynamic states
+            .layout(layout)
+            .render_pass(render_pass)
+            .subpass(0)
+            // .base_pipeline_handle() null since it is not derived from another
+            // .base_pipeline_index(-1) same
+            .build();
+        let pipeline_infos = [pipeline_info];
+
+        let pipeline = unsafe {
+            device
+                .create_graphics_pipelines(vk::PipelineCache::null(), &pipeline_infos, None)
+                .unwrap()[0]
         };
 
         unsafe {
@@ -546,7 +582,7 @@ impl VulkanApp {
             device.destroy_shader_module(fragment_shader_module, None);
         };
 
-        (pipeline_layout)
+        (pipeline, layout)
     }
 
     fn read_shader_from_file<P: AsRef<std::path::Path>>(path: P) -> Vec<u32> {
@@ -568,6 +604,7 @@ impl Drop for VulkanApp {
     fn drop(&mut self) {
         log::debug!("Dropping application.");
         unsafe {
+            self.device.destroy_pipeline(self.pipeline, None);
             self.device
                 .destroy_pipeline_layout(self.pipeline_layout, None);
             self.device.destroy_render_pass(self.render_pass, None);

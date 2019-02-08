@@ -71,6 +71,9 @@ Create the vertex and fragment shaders GLSL source and add a `compile.bat` scrip
 to compile it into SPIR-V bytecode using `glslangValidator`.
 Load the compiled SPIR-V and create a `ShaderModule` from it.
 
+In this section I forgot to create the shader stage create info structures. It's ok
+they will be created in `1.3.5: Graphics pipeline`.
+
 ### 1.3.3: Fixed functions
 
 This one is huge so it will be split across several commits.
@@ -102,6 +105,12 @@ Create the pipeline layout info.
 ### 1.3.4: Render passes
 
 Create the render pass.
+
+### 1.3.5: Graphics pipeline
+
+Create the `PipelineShaderStageCreateInfo` that we forgot in `1.3.2: Shader module`.
+
+Create the grahics pipeline. 
 
 ## Run it
 
