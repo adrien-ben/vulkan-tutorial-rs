@@ -35,6 +35,7 @@ struct VulkanApp {
     _swapchain_properties: SwapchainProperties,
     _images: Vec<vk::Image>,
     swapchain_image_views: Vec<vk::ImageView>,
+    render_pass: vk::RenderPass,
     pipeline_layout: vk::PipelineLayout,
 }
 
@@ -72,6 +73,7 @@ impl VulkanApp {
         let swapchain_image_views =
             Self::create_swapchain_image_views(&device, &images, properties);
 
+        let render_pass = Self::create_render_pass(&device, properties);
         let layout = Self::create_pipeline(&device, properties);
 
         Self {
@@ -91,6 +93,7 @@ impl VulkanApp {
             _swapchain_properties: properties,
             _images: images,
             swapchain_image_views,
+            render_pass,
             pipeline_layout: layout,
         }
     }
@@ -409,6 +412,40 @@ impl VulkanApp {
             .collect::<Vec<_>>()
     }
 
+    fn create_render_pass(
+        device: &Device,
+        swapchain_properties: SwapchainProperties,
+    ) -> vk::RenderPass {
+        let attachment_desc = vk::AttachmentDescription::builder()
+            .format(swapchain_properties.format.format)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+            .build();
+        let attachment_descs = [attachment_desc];
+
+        let attachment_ref = vk::AttachmentReference::builder()
+            .attachment(0)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
+        let attachment_refs = [attachment_ref];
+
+        let subpass_desc = vk::SubpassDescription::builder()
+            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+            .color_attachments(&attachment_refs)
+            .build();
+        let subpass_descs = [subpass_desc];
+
+        let render_pass_info = vk::RenderPassCreateInfo::builder()
+            .attachments(&attachment_descs)
+            .subpasses(&subpass_descs)
+            .build();
+
+        unsafe { device.create_render_pass(&render_pass_info, None).unwrap() }
+    }
+
     fn create_pipeline(
         device: &Device,
         swapchain_properties: SwapchainProperties,
@@ -531,7 +568,9 @@ impl Drop for VulkanApp {
     fn drop(&mut self) {
         log::debug!("Dropping application.");
         unsafe {
-            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device
+                .destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device.destroy_render_pass(self.render_pass, None);
             self.swapchain_image_views
                 .iter()
                 .for_each(|v| self.device.destroy_image_view(*v, None));

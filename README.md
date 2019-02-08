@@ -99,6 +99,10 @@ Create color blend attachment and color blend info for the pipeline.
 
 Create the pipeline layout info.
 
+### 1.3.4: Render passes
+
+Create the render pass.
+
 ## Run it
 
 With validation layers:
