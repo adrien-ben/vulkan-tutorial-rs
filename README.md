@@ -128,6 +128,10 @@ The build script scan the content of the `shaders` directory and generates a com
 SPIR-V shader for each file it founds. The files are generated in a the same directory
 as the GLSL shaders and with the same name appended with `.spv`.
 
+### 1.4.1: Framebuffers
+
+Create one framebuffer for each image of the swapchain.
+
 ## Run it
 
 With validation layers:

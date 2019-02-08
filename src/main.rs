@@ -38,6 +38,7 @@ struct VulkanApp {
     render_pass: vk::RenderPass,
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
+    swapchain_framebuffers: Vec<vk::Framebuffer>,
 }
 
 impl VulkanApp {
@@ -76,6 +77,8 @@ impl VulkanApp {
 
         let render_pass = Self::create_render_pass(&device, properties);
         let (pipeline, layout) = Self::create_pipeline(&device, properties, render_pass);
+        let swapchain_framebuffers =
+            Self::create_framebuffers(&device, &swapchain_image_views, render_pass, properties);
 
         Self {
             _event_loop: events_loop,
@@ -97,6 +100,7 @@ impl VulkanApp {
             render_pass,
             pipeline_layout: layout,
             pipeline,
+            swapchain_framebuffers,
         }
     }
 
@@ -594,6 +598,28 @@ impl VulkanApp {
         unsafe { device.create_shader_module(&create_info, None).unwrap() }
     }
 
+    fn create_framebuffers(
+        device: &Device,
+        image_views: &[vk::ImageView],
+        render_pass: vk::RenderPass,
+        swapchain_properties: SwapchainProperties,
+    ) -> Vec<vk::Framebuffer> {
+        image_views
+            .into_iter()
+            .map(|view| [*view])
+            .map(|attachments| {
+                let framebuffer_info = vk::FramebufferCreateInfo::builder()
+                    .render_pass(render_pass)
+                    .attachments(&attachments)
+                    .width(swapchain_properties.extent.width)
+                    .height(swapchain_properties.extent.height)
+                    .layers(1)
+                    .build();
+                unsafe { device.create_framebuffer(&framebuffer_info, None).unwrap() }
+            })
+            .collect::<Vec<_>>()
+    }
+
     fn run(&mut self) {
         log::debug!("Running application.");
     }
@@ -603,6 +629,9 @@ impl Drop for VulkanApp {
     fn drop(&mut self) {
         log::debug!("Dropping application.");
         unsafe {
+            self.swapchain_framebuffers
+                .iter()
+                .for_each(|f| self.device.destroy_framebuffer(*f, None));
             self.device.destroy_pipeline(self.pipeline, None);
             self.device
                 .destroy_pipeline_layout(self.pipeline_layout, None);
