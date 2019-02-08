@@ -95,6 +95,10 @@ Create the multisampling info for the pipeline.
 
 Create color blend attachment and color blend info for the pipeline.
 
+#### 1.3.3.6: Pipeline layout
+
+Create the pipeline layout info.
+
 ## Run it
 
 With validation layers:

@@ -35,6 +35,7 @@ struct VulkanApp {
     _swapchain_properties: SwapchainProperties,
     _images: Vec<vk::Image>,
     swapchain_image_views: Vec<vk::ImageView>,
+    pipeline_layout: vk::PipelineLayout,
 }
 
 impl VulkanApp {
@@ -71,7 +72,7 @@ impl VulkanApp {
         let swapchain_image_views =
             Self::create_swapchain_image_views(&device, &images, properties);
 
-        let _pipeline = Self::create_pipeline(&device, properties);
+        let layout = Self::create_pipeline(&device, properties);
 
         Self {
             _event_loop: events_loop,
@@ -90,6 +91,7 @@ impl VulkanApp {
             _swapchain_properties: properties,
             _images: images,
             swapchain_image_views,
+            pipeline_layout: layout,
         }
     }
 
@@ -407,7 +409,10 @@ impl VulkanApp {
             .collect::<Vec<_>>()
     }
 
-    fn create_pipeline(device: &Device, swapchain_properties: SwapchainProperties) {
+    fn create_pipeline(
+        device: &Device,
+        swapchain_properties: SwapchainProperties,
+    ) -> vk::PipelineLayout {
         let vertex_source =
             Self::read_shader_from_file("C:/dev/vulkan-tutorial-ash/shaders/shader.vert.spv");
         let fragment_source =
@@ -486,10 +491,25 @@ impl VulkanApp {
             .blend_constants([0.0, 0.0, 0.0, 0.0])
             .build();
 
+        let pipeline_layout = {
+            let pipeline_layout_info = vk::PipelineLayoutCreateInfo::builder()
+                // .set_layouts() null since we don't have uniforms in our shaders
+                // .push_constant_ranges
+                .build();
+
+            unsafe {
+                device
+                    .create_pipeline_layout(&pipeline_layout_info, None)
+                    .unwrap()
+            }
+        };
+
         unsafe {
             device.destroy_shader_module(vertex_shader_module, None);
             device.destroy_shader_module(fragment_shader_module, None);
         };
+
+        (pipeline_layout)
     }
 
     fn read_shader_from_file<P: AsRef<std::path::Path>>(path: P) -> Vec<u32> {
@@ -511,6 +531,7 @@ impl Drop for VulkanApp {
     fn drop(&mut self) {
         log::debug!("Dropping application.");
         unsafe {
+            self.device.destroy_pipeline_layout(self.pipeline_layout, None);
             self.swapchain_image_views
                 .iter()
                 .for_each(|v| self.device.destroy_image_view(*v, None));
