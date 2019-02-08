@@ -10,6 +10,12 @@ long chapters.
 
 Sometimes an 'extra' commit will be added with some refactoring or commenting.
 
+## Requirements
+
+The project will only run on windows for now. You need to have a [Vulkan SDK][3] installed.
+For the project to compile you need to have the `VULKAN_SDK` environment variable set. This
+is used when building the project to compile the shaders.
+
 ## Commits
 
 ### 1.1.1: Base code
@@ -112,6 +118,16 @@ Create the `PipelineShaderStageCreateInfo` that we forgot in `1.3.2: Shader modu
 
 Create the grahics pipeline. 
 
+### 1.3.extra: Shader compilation refactoring
+
+Until now we compiled the shaders with a `compile.bat` script that we have to run 
+manually before running the application. In this section, we will compite them
+when building the application using [Cargo][2]'s build scripts.
+
+The build script scan the content of the `shaders` directory and generates a compiled
+SPIR-V shader for each file it founds. The files are generated in a the same directory
+as the GLSL shaders and with the same name appended with `.spv`.
+
 ## Run it
 
 With validation layers:
@@ -128,3 +144,5 @@ RUST_LOG=vulkan_tutorial_ash=debug cargo run --release
 
 [0]: https://vulkan-tutorial.com/Introduction
 [1]: https://github.com/MaikKlein/ash
+[2]: https://doc.rust-lang.org/cargo
+[3]: https://www.lunarg.com/vulkan-sdk

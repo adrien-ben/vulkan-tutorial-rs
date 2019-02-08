@@ -453,10 +453,8 @@ impl VulkanApp {
         swapchain_properties: SwapchainProperties,
         render_pass: vk::RenderPass,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
-        let vertex_source =
-            Self::read_shader_from_file("C:/dev/vulkan-tutorial-ash/shaders/shader.vert.spv");
-        let fragment_source =
-            Self::read_shader_from_file("C:/dev/vulkan-tutorial-ash/shaders/shader.frag.spv");
+        let vertex_source = Self::read_shader_from_file("shaders/shader.vert.spv");
+        let fragment_source = Self::read_shader_from_file("shaders/shader.frag.spv");
 
         let vertex_shader_module = Self::create_shader_module(device, &vertex_source);
         let fragment_shader_module = Self::create_shader_module(device, &fragment_source);
@@ -586,6 +584,7 @@ impl VulkanApp {
     }
 
     fn read_shader_from_file<P: AsRef<std::path::Path>>(path: P) -> Vec<u32> {
+        log::debug!("Loading shader file {}", path.as_ref().to_str().unwrap());
         let mut file = std::fs::File::open(path).unwrap();
         ash::util::read_spv(&mut file).unwrap()
     }
