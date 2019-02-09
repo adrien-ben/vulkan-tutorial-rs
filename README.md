@@ -168,6 +168,11 @@ to avoid having to recreate it multiple times.
 - Implement `Iterator` for `InFlightFrames` so we just need to call `next()` to
 get next frame sync objects.
 
+### 1.5: Swapchain recreation
+
+Handle swapchain recreation when resizing the window or when the swapchain is suboptimal
+or out of date.
+
 ## Run it
 
 With validation layers:
