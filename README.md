@@ -145,6 +145,11 @@ This section is also split across multiple commits.
 
 Setup the main loop.
 
+#### 1.4.3.2: Semaphores
+
+Create a semphore to signal that an image has been acquired and another one
+to signal that the rendering to the image is finished.
+
 ## Run it
 
 With validation layers:

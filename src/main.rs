@@ -41,6 +41,8 @@ struct VulkanApp {
     swapchain_framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
     _command_buffers: Vec<vk::CommandBuffer>,
+    image_available_semaphore: vk::Semaphore,
+    render_finished_semaphore: vk::Semaphore,
 }
 
 impl VulkanApp {
@@ -93,6 +95,9 @@ impl VulkanApp {
             pipeline,
         );
 
+        let (image_available_semaphore, render_finished_semaphore) =
+            Self::create_semaphores(&device);
+
         Self {
             events_loop: events_loop,
             _window: window,
@@ -116,6 +121,8 @@ impl VulkanApp {
             swapchain_framebuffers,
             command_pool,
             _command_buffers: command_buffers,
+            image_available_semaphore,
+            render_finished_semaphore,
         }
     }
 
@@ -740,6 +747,18 @@ impl VulkanApp {
         buffers
     }
 
+    fn create_semaphores(device: &Device) -> (vk::Semaphore, vk::Semaphore) {
+        let image_available = {
+            let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
+            unsafe { device.create_semaphore(&semaphore_info, None).unwrap() }
+        };
+        let render_finished = {
+            let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
+            unsafe { device.create_semaphore(&semaphore_info, None).unwrap() }
+        };
+        (image_available, render_finished)
+    }
+
     fn run(&mut self) {
         log::debug!("Running application.");
         loop {
@@ -775,6 +794,10 @@ impl Drop for VulkanApp {
     fn drop(&mut self) {
         log::debug!("Dropping application.");
         unsafe {
+            self.device
+                .destroy_semaphore(self.render_finished_semaphore, None);
+            self.device
+                .destroy_semaphore(self.image_available_semaphore, None);
             self.device.destroy_command_pool(self.command_pool, None);
             self.swapchain_framebuffers
                 .iter()
