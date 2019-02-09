@@ -42,10 +42,7 @@ struct VulkanApp {
     swapchain_framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
     command_buffers: Vec<vk::CommandBuffer>,
-    image_available_semaphores: Vec<vk::Semaphore>,
-    render_finished_semaphores: Vec<vk::Semaphore>,
-    in_flight_fences: Vec<vk::Fence>,
-    current_frame: usize,
+    in_flight_frames: InFlightFrames,
 }
 
 impl VulkanApp {
@@ -63,13 +60,13 @@ impl VulkanApp {
         let surface = Surface::new(&entry, &instance);
         let surface_khr = unsafe { surface::create_surface(&entry, &instance, &window).unwrap() };
         let debug_report_callback = setup_debug_messenger(&entry, &instance);
-        let physical_device = Self::pick_physical_device(&instance, &surface, surface_khr);
+        let (physical_device, queue_families_indices) =
+            Self::pick_physical_device(&instance, &surface, surface_khr);
         let (device, graphics_queue, present_queue) =
             Self::create_logical_device_with_graphics_queue(
                 &instance,
-                &surface,
-                surface_khr,
                 physical_device,
+                queue_families_indices,
             );
 
         let (swapchain, swapchain_khr, properties, images) = Self::create_swapchain_and_images(
@@ -78,6 +75,7 @@ impl VulkanApp {
             &device,
             &surface,
             surface_khr,
+            queue_families_indices,
         );
         let swapchain_image_views =
             Self::create_swapchain_image_views(&device, &images, properties);
@@ -87,8 +85,7 @@ impl VulkanApp {
         let swapchain_framebuffers =
             Self::create_framebuffers(&device, &swapchain_image_views, render_pass, properties);
 
-        let command_pool =
-            Self::create_command_pool(&device, &instance, &surface, surface_khr, physical_device);
+        let command_pool = Self::create_command_pool(&device, queue_families_indices);
         let command_buffers = Self::create_and_register_command_buffers(
             &device,
             command_pool,
@@ -98,8 +95,7 @@ impl VulkanApp {
             pipeline,
         );
 
-        let (image_available_semaphores, render_finished_semaphores, in_flight_fences) =
-            Self::create_sync_objects(&device);
+        let in_flight_frames = Self::create_sync_objects(&device);
 
         Self {
             events_loop: events_loop,
@@ -124,10 +120,7 @@ impl VulkanApp {
             swapchain_framebuffers,
             command_pool,
             command_buffers,
-            image_available_semaphores,
-            render_finished_semaphores,
-            in_flight_fences,
-            current_frame: 0,
+            in_flight_frames,
         }
     }
 
@@ -162,15 +155,19 @@ impl VulkanApp {
 
     /// Pick the first suitable physical device.
     ///
-    /// # Requierements
+    /// # Requirements
     /// - At least one queue family with one queue supportting graphics.
     /// - At least one queue family with one queue supporting presentation to `surface_khr`.
     /// - Swapchain extension support.
+    ///
+    /// # Returns
+    ///
+    /// A tuple containing the physical device and the queue families indices.
     fn pick_physical_device(
         instance: &Instance,
         surface: &Surface,
         surface_khr: vk::SurfaceKHR,
-    ) -> vk::PhysicalDevice {
+    ) -> (vk::PhysicalDevice, QueueFamiliesIndices) {
         let devices = unsafe { instance.enumerate_physical_devices().unwrap() };
         let device = devices
             .into_iter()
@@ -181,7 +178,14 @@ impl VulkanApp {
         log::debug!("Selected physical device: {:?}", unsafe {
             CStr::from_ptr(props.device_name.as_ptr())
         });
-        device
+
+        let (graphics, present) = Self::find_queue_families(instance, surface, surface_khr, device);
+        let queue_families_indices = QueueFamiliesIndices {
+            graphics_index: graphics.unwrap(),
+            present_index: present.unwrap(),
+        };
+
+        (device, queue_families_indices)
     }
 
     fn is_device_suitable(
@@ -271,14 +275,11 @@ impl VulkanApp {
     /// Return a tuple containing the logical device, the graphics queue and the presentation queue.
     fn create_logical_device_with_graphics_queue(
         instance: &Instance,
-        surface: &Surface,
-        surface_khr: vk::SurfaceKHR,
         device: vk::PhysicalDevice,
+        queue_families_indices: QueueFamiliesIndices,
     ) -> (Device, vk::Queue, vk::Queue) {
-        let (graphics_family_index, present_family_index) =
-            Self::find_queue_families(instance, surface, surface_khr, device);
-        let graphics_family_index = graphics_family_index.unwrap();
-        let present_family_index = present_family_index.unwrap();
+        let graphics_family_index = queue_families_indices.graphics_index;
+        let present_family_index = queue_families_indices.present_index;
         let queue_priorities = [1.0f32];
 
         let queue_create_infos = {
@@ -345,6 +346,7 @@ impl VulkanApp {
         device: &Device,
         surface: &Surface,
         surface_khr: vk::SurfaceKHR,
+        queue_families_indices: QueueFamiliesIndices,
     ) -> (
         Swapchain,
         vk::SwapchainKHR,
@@ -375,9 +377,9 @@ impl VulkanApp {
             image_count,
         );
 
-        let (graphics, present) =
-            Self::find_queue_families(instance, surface, surface_khr, physical_device);
-        let families_indices = [graphics.unwrap(), present.unwrap()];
+        let graphics = queue_families_indices.graphics_index;
+        let present = queue_families_indices.present_index;
+        let families_indices = [graphics, present];
 
         let create_info = {
             let mut builder = vk::SwapchainCreateInfoKHR::builder()
@@ -389,12 +391,12 @@ impl VulkanApp {
                 .image_array_layers(1)
                 .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
 
-            builder = match (graphics, present) {
-                (Some(graphics), Some(present)) if graphics != present => builder
+            builder = if graphics != present {
+                builder
                     .image_sharing_mode(vk::SharingMode::CONCURRENT)
-                    .queue_family_indices(&families_indices),
-                (Some(_), Some(_)) => builder.image_sharing_mode(vk::SharingMode::EXCLUSIVE),
-                _ => panic!(),
+                    .queue_family_indices(&families_indices)
+            } else {
+                builder.image_sharing_mode(vk::SharingMode::EXCLUSIVE)
             };
 
             builder
@@ -662,16 +664,10 @@ impl VulkanApp {
 
     fn create_command_pool(
         device: &Device,
-        instance: &Instance,
-        surface: &Surface,
-        surface_khr: vk::SurfaceKHR,
-        physical_device: vk::PhysicalDevice,
+        queue_families_indices: QueueFamiliesIndices,
     ) -> vk::CommandPool {
-        let (graphics_family, _) =
-            Self::find_queue_families(instance, surface, surface_khr, physical_device);
-
         let command_pool_info = vk::CommandPoolCreateInfo::builder()
-            .queue_family_index(graphics_family.unwrap())
+            .queue_family_index(queue_families_indices.graphics_index)
             .flags(vk::CommandPoolCreateFlags::empty())
             .build();
 
@@ -765,39 +761,35 @@ impl VulkanApp {
         buffers
     }
 
-    fn create_sync_objects(
-        device: &Device,
-    ) -> (Vec<vk::Semaphore>, Vec<vk::Semaphore>, Vec<vk::Fence>) {
-        let mut image_available_semaphores = Vec::new();
-        let mut render_finished_semaphores = Vec::new();
-        let mut in_flight_fences = Vec::new();
+    fn create_sync_objects(device: &Device) -> InFlightFrames {
+        let mut sync_objects_vec = Vec::new();
         for _ in 0..MAX_FRAMES_IN_FLIGHT {
-            let image_available = {
+            let image_available_semaphore = {
                 let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
                 unsafe { device.create_semaphore(&semaphore_info, None).unwrap() }
             };
-            image_available_semaphores.push(image_available);
 
-            let render_finished = {
+            let render_finished_semaphore = {
                 let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
                 unsafe { device.create_semaphore(&semaphore_info, None).unwrap() }
             };
-            render_finished_semaphores.push(render_finished);
 
-            let in_flight = {
+            let in_flight_fence = {
                 let fence_info = vk::FenceCreateInfo::builder()
                     .flags(vk::FenceCreateFlags::SIGNALED)
                     .build();
                 unsafe { device.create_fence(&fence_info, None).unwrap() }
             };
-            in_flight_fences.push(in_flight);
+
+            let sync_objects = SyncObjects {
+                image_available_semaphore,
+                render_finished_semaphore,
+                fence: in_flight_fence,
+            };
+            sync_objects_vec.push(sync_objects)
         }
 
-        (
-            image_available_semaphores,
-            render_finished_semaphores,
-            in_flight_fences,
-        )
+        InFlightFrames::new(sync_objects_vec)
     }
 
     fn run(&mut self) {
@@ -829,9 +821,10 @@ impl VulkanApp {
 
     fn draw_frame(&mut self) {
         log::trace!("Drawing frame.");
-        let image_available_semaphore = self.image_available_semaphores[self.current_frame];
-        let render_finished_semaphore = self.render_finished_semaphores[self.current_frame];
-        let in_flight_fence = self.in_flight_fences[self.current_frame];
+        let sync_objects = self.in_flight_frames.next().unwrap();
+        let image_available_semaphore = sync_objects.image_available_semaphore;
+        let render_finished_semaphore = sync_objects.render_finished_semaphore;
+        let in_flight_fence = sync_objects.fence;
         let wait_fences = [in_flight_fence];
 
         unsafe {
@@ -890,24 +883,14 @@ impl VulkanApp {
                     .unwrap()
             };
         }
-
-        self.current_frame += (1 + self.current_frame) % MAX_FRAMES_IN_FLIGHT as usize;
     }
 }
 
 impl Drop for VulkanApp {
     fn drop(&mut self) {
         log::debug!("Dropping application.");
+        self.in_flight_frames.destroy(&self.device);
         unsafe {
-            self.in_flight_fences
-                .iter()
-                .for_each(|f| self.device.destroy_fence(*f, None));
-            self.render_finished_semaphores
-                .iter()
-                .for_each(|s| self.device.destroy_semaphore(*s, None));
-            self.image_available_semaphores
-                .iter()
-                .for_each(|s| self.device.destroy_semaphore(*s, None));
             self.device.destroy_command_pool(self.command_pool, None);
             self.swapchain_framebuffers
                 .iter()
@@ -927,6 +910,59 @@ impl Drop for VulkanApp {
             }
             self.instance.destroy_instance(None);
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct QueueFamiliesIndices {
+    graphics_index: u32,
+    present_index: u32,
+}
+
+#[derive(Clone, Copy)]
+struct SyncObjects {
+    image_available_semaphore: vk::Semaphore,
+    render_finished_semaphore: vk::Semaphore,
+    fence: vk::Fence,
+}
+
+impl SyncObjects {
+    fn destroy(&self, device: &Device) {
+        unsafe {
+            device.destroy_semaphore(self.image_available_semaphore, None);
+            device.destroy_semaphore(self.render_finished_semaphore, None);
+            device.destroy_fence(self.fence, None);
+        }
+    }
+}
+
+struct InFlightFrames {
+    sync_objects: Vec<SyncObjects>,
+    current_frame: usize,
+}
+
+impl InFlightFrames {
+    fn new(sync_objects: Vec<SyncObjects>) -> Self {
+        Self {
+            sync_objects,
+            current_frame: 0,
+        }
+    }
+
+    fn destroy(&self, device: &Device) {
+        self.sync_objects.iter().for_each(|o| o.destroy(&device));
+    }
+}
+
+impl Iterator for InFlightFrames {
+    type Item = SyncObjects;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = self.sync_objects[self.current_frame];
+
+        self.current_frame = (self.current_frame + 1) % self.sync_objects.len();
+
+        Some(next)
     }
 }
 

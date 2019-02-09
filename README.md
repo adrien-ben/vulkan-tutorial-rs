@@ -159,6 +159,15 @@ present the rendered image.
 
 Limit the number of frames that can be renderer simultaneously using fences.
 
+### 1.4.extra: Refactoring
+
+- Add `QueueFamilyIndices` structure and return it at physical device creation
+to avoid having to recreate it multiple times.
+- Add `SyncObjects` containing the semaphores and fence for one frame.
+- Add `InFlightFrames` containing all `SyncObjects` and the current frame index.
+- Implement `Iterator` for `InFlightFrames` so we just need to call `next()` to
+get next frame sync objects.
+
 ## Run it
 
 With validation layers:
