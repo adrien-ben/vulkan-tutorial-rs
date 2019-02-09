@@ -39,6 +39,8 @@ struct VulkanApp {
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
     swapchain_framebuffers: Vec<vk::Framebuffer>,
+    command_pool: vk::CommandPool,
+    _command_buffers: Vec<vk::CommandBuffer>,
 }
 
 impl VulkanApp {
@@ -80,6 +82,17 @@ impl VulkanApp {
         let swapchain_framebuffers =
             Self::create_framebuffers(&device, &swapchain_image_views, render_pass, properties);
 
+        let command_pool =
+            Self::create_command_pool(&device, &instance, &surface, surface_khr, physical_device);
+        let command_buffers = Self::create_and_register_command_buffers(
+            &device,
+            command_pool,
+            &swapchain_framebuffers,
+            render_pass,
+            properties,
+            pipeline,
+        );
+
         Self {
             _event_loop: events_loop,
             _window: window,
@@ -101,6 +114,8 @@ impl VulkanApp {
             pipeline_layout: layout,
             pipeline,
             swapchain_framebuffers,
+            command_pool,
+            _command_buffers: command_buffers,
         }
     }
 
@@ -620,6 +635,111 @@ impl VulkanApp {
             .collect::<Vec<_>>()
     }
 
+    fn create_command_pool(
+        device: &Device,
+        instance: &Instance,
+        surface: &Surface,
+        surface_khr: vk::SurfaceKHR,
+        physical_device: vk::PhysicalDevice,
+    ) -> vk::CommandPool {
+        let (graphics_family, _) =
+            Self::find_queue_families(instance, surface, surface_khr, physical_device);
+
+        let command_pool_info = vk::CommandPoolCreateInfo::builder()
+            .queue_family_index(graphics_family.unwrap())
+            .flags(vk::CommandPoolCreateFlags::empty())
+            .build();
+
+        unsafe {
+            device
+                .create_command_pool(&command_pool_info, None)
+                .unwrap()
+        }
+    }
+
+    fn create_and_register_command_buffers(
+        device: &Device,
+        pool: vk::CommandPool,
+        framebuffers: &[vk::Framebuffer],
+        render_pass: vk::RenderPass,
+        swapchain_properties: SwapchainProperties,
+        graphics_pipeline: vk::Pipeline,
+    ) -> Vec<vk::CommandBuffer> {
+        let allocate_info = vk::CommandBufferAllocateInfo::builder()
+            .command_pool(pool)
+            .level(vk::CommandBufferLevel::PRIMARY)
+            .command_buffer_count(framebuffers.len() as _)
+            .build();
+
+        let buffers = unsafe { device.allocate_command_buffers(&allocate_info).unwrap() };
+
+        buffers
+            .iter()
+            .zip(framebuffers.iter())
+            .for_each(|(buffer, framebuffer)| {
+                let buffer = *buffer;
+
+                // begin command buffer
+                {
+                    let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
+                        .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
+                        // .inheritance_info() null since it's a primary command buffer
+                        .build();
+                    unsafe {
+                        device
+                            .begin_command_buffer(buffer, &command_buffer_begin_info)
+                            .unwrap()
+                    };
+                }
+
+                // begin render pass
+                {
+                    let clear_values = [vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: [0.0, 0.0, 0.0, 1.0],
+                        },
+                    }];
+                    let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+                        .render_pass(render_pass)
+                        .framebuffer(*framebuffer)
+                        .render_area(vk::Rect2D {
+                            offset: vk::Offset2D { x: 0, y: 0 },
+                            extent: swapchain_properties.extent,
+                        })
+                        .clear_values(&clear_values)
+                        .build();
+
+                    unsafe {
+                        device.cmd_begin_render_pass(
+                            buffer,
+                            &render_pass_begin_info,
+                            vk::SubpassContents::INLINE,
+                        )
+                    };
+                }
+
+                // Bind pipeline
+                unsafe {
+                    device.cmd_bind_pipeline(
+                        buffer,
+                        vk::PipelineBindPoint::GRAPHICS,
+                        graphics_pipeline,
+                    )
+                };
+
+                // Draw
+                unsafe { device.cmd_draw(buffer, 3, 1, 0, 0) };
+
+                // End render pass
+                unsafe { device.cmd_end_render_pass(buffer) };
+
+                // End command buffer
+                unsafe { device.end_command_buffer(buffer).unwrap() };
+            });
+
+        buffers
+    }
+
     fn run(&mut self) {
         log::debug!("Running application.");
     }
@@ -629,6 +749,7 @@ impl Drop for VulkanApp {
     fn drop(&mut self) {
         log::debug!("Dropping application.");
         unsafe {
+            self.device.destroy_command_pool(self.command_pool, None);
             self.swapchain_framebuffers
                 .iter()
                 .for_each(|f| self.device.destroy_framebuffer(*f, None));

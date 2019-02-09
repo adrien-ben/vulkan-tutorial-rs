@@ -132,6 +132,11 @@ as the GLSL shaders and with the same name appended with `.spv`.
 
 Create one framebuffer for each image of the swapchain.
 
+### 1.4.2: Command buffers
+
+Create a command pool and allocate one command buffer per swapchain image.
+Then we register all the commands required to render.
+
 ## Run it
 
 With validation layers:
