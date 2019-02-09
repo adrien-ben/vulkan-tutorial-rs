@@ -137,6 +137,14 @@ Create one framebuffer for each image of the swapchain.
 Create a command pool and allocate one command buffer per swapchain image.
 Then we register all the commands required to render.
 
+### 1.4.3: Rendering and presentation
+
+This section is also split across multiple commits.
+
+#### 1.4.3.1: Main loop
+
+Setup the main loop.
+
 ## Run it
 
 With validation layers:

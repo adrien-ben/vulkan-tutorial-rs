@@ -13,13 +13,13 @@ use ash::{vk, Device, Entry, Instance};
 use debug::*;
 use std::ffi::{CStr, CString};
 use swapchain::*;
-use winit::{dpi::LogicalSize, EventsLoop, Window, WindowBuilder};
+use winit::{dpi::LogicalSize, Event, EventsLoop, Window, WindowBuilder, WindowEvent};
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 
 struct VulkanApp {
-    _event_loop: EventsLoop,
+    events_loop: EventsLoop,
     _window: Window,
     _entry: Entry,
     instance: Instance,
@@ -94,7 +94,7 @@ impl VulkanApp {
         );
 
         Self {
-            _event_loop: events_loop,
+            events_loop: events_loop,
             _window: window,
             _entry: entry,
             instance,
@@ -742,6 +742,32 @@ impl VulkanApp {
 
     fn run(&mut self) {
         log::debug!("Running application.");
+        loop {
+            if self.process_event() {
+                break;
+            }
+            self.draw_frame()
+        }
+    }
+
+    /// Process the events from the `EventsLoop` and return whether the
+    /// main loop should stop.
+    fn process_event(&mut self) -> bool {
+        let mut should_stop = false;
+        self.events_loop.poll_events(|event| match event {
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
+                ..
+            } => {
+                should_stop = true;
+            }
+            _ => {}
+        });
+        should_stop
+    }
+
+    fn draw_frame(&mut self) {
+        log::trace!("Drawing frame.");
     }
 }
 
