@@ -28,8 +28,8 @@ struct VulkanApp {
     surface_khr: vk::SurfaceKHR,
     _physical_device: vk::PhysicalDevice,
     device: Device,
-    _graphics_queue: vk::Queue,
-    _present_queue: vk::Queue,
+    graphics_queue: vk::Queue,
+    present_queue: vk::Queue,
     swapchain: Swapchain,
     swapchain_khr: vk::SwapchainKHR,
     _swapchain_properties: SwapchainProperties,
@@ -40,7 +40,7 @@ struct VulkanApp {
     pipeline: vk::Pipeline,
     swapchain_framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
-    _command_buffers: Vec<vk::CommandBuffer>,
+    command_buffers: Vec<vk::CommandBuffer>,
     image_available_semaphore: vk::Semaphore,
     render_finished_semaphore: vk::Semaphore,
 }
@@ -108,8 +108,8 @@ impl VulkanApp {
             surface_khr,
             _physical_device: physical_device,
             device,
-            _graphics_queue: graphics_queue,
-            _present_queue: present_queue,
+            graphics_queue,
+            present_queue,
             swapchain,
             swapchain_khr,
             _swapchain_properties: properties,
@@ -120,7 +120,7 @@ impl VulkanApp {
             pipeline,
             swapchain_framebuffers,
             command_pool,
-            _command_buffers: command_buffers,
+            command_buffers,
             image_available_semaphore,
             render_finished_semaphore,
         }
@@ -466,9 +466,22 @@ impl VulkanApp {
             .build();
         let subpass_descs = [subpass_desc];
 
+        let subpass_dep = vk::SubpassDependency::builder()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .dst_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            )
+            .build();
+        let subpass_deps = [subpass_dep];
+
         let render_pass_info = vk::RenderPassCreateInfo::builder()
             .attachments(&attachment_descs)
             .subpasses(&subpass_descs)
+            .dependencies(&subpass_deps)
             .build();
 
         unsafe { device.create_render_pass(&render_pass_info, None).unwrap() }
@@ -767,6 +780,7 @@ impl VulkanApp {
             }
             self.draw_frame()
         }
+        unsafe { self.device.device_wait_idle().unwrap() };
     }
 
     /// Process the events from the `EventsLoop` and return whether the
@@ -787,6 +801,55 @@ impl VulkanApp {
 
     fn draw_frame(&mut self) {
         log::trace!("Drawing frame.");
+        let image_index = unsafe {
+            self.swapchain
+                .acquire_next_image(
+                    self.swapchain_khr,
+                    std::u64::MAX,
+                    self.image_available_semaphore,
+                    vk::Fence::null(),
+                )
+                .unwrap()
+                .0
+        };
+
+        let wait_semaphores = [self.image_available_semaphore];
+        let signal_semaphores = [self.render_finished_semaphore];
+
+        // Submit command buffer
+        {
+            let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+            let command_buffers = [self.command_buffers[image_index as usize]];
+            let submit_info = vk::SubmitInfo::builder()
+                .wait_semaphores(&wait_semaphores)
+                .wait_dst_stage_mask(&wait_stages)
+                .command_buffers(&command_buffers)
+                .signal_semaphores(&signal_semaphores)
+                .build();
+            let submit_infos = [submit_info];
+            unsafe {
+                self.device
+                    .queue_submit(self.graphics_queue, &submit_infos, vk::Fence::null())
+                    .unwrap()
+            };
+        }
+
+        let swapchains = [self.swapchain_khr];
+        let images_indices = [image_index];
+
+        {
+            let present_info = vk::PresentInfoKHR::builder()
+                .wait_semaphores(&signal_semaphores)
+                .swapchains(&swapchains)
+                .image_indices(&images_indices)
+                // .results() null since we only have one swapchain
+                .build();
+            unsafe {
+                self.swapchain
+                    .queue_present(self.present_queue, &present_info)
+                    .unwrap()
+            };
+        }
     }
 }
 

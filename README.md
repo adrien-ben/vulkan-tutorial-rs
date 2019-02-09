@@ -150,6 +150,11 @@ Setup the main loop.
 Create a semphore to signal that an image has been acquired and another one
 to signal that the rendering to the image is finished.
 
+#### 1.4.3.3: Rendering the triangle!
+
+Acquire the next image from the swapchain, submit the command buffer and
+present the rendered image.
+
 ## Run it
 
 With validation layers:
