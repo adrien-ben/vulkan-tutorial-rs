@@ -155,6 +155,10 @@ to signal that the rendering to the image is finished.
 Acquire the next image from the swapchain, submit the command buffer and
 present the rendered image.
 
+#### 1.4.3.4: Frames in flight
+
+Limit the number of frames that can be renderer simultaneously using fences.
+
 ## Run it
 
 With validation layers:
