@@ -18,6 +18,20 @@ use winit::{dpi::LogicalSize, Event, EventsLoop, Window, WindowBuilder, WindowEv
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
+const VERTICES: [Vertex; 3] = [
+    Vertex {
+        pos: [0.0, -0.5],
+        color: [1.0, 0.0, 0.0],
+    },
+    Vertex {
+        pos: [0.5, 0.5],
+        color: [0.0, 1.0, 0.0],
+    },
+    Vertex {
+        pos: [-0.5, 0.5],
+        color: [0.0, 0.0, 1.0],
+    },
+];
 
 struct VulkanApp {
     events_loop: EventsLoop,
@@ -524,9 +538,11 @@ impl VulkanApp {
             .build();
         let shader_states_infos = [vertex_shader_state_info, fragment_shader_state_info];
 
+        let vertex_binding_descs = [Vertex::get_binding_description()];
+        let vertex_attribute_descs = Vertex::get_attribute_descriptions();
         let vertex_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
-            // .vertex_binding_descriptions() null since vertices are hard coded in the shader
-            // .vertex_attribute_descriptions() same here
+            .vertex_binding_descriptions(&vertex_binding_descs)
+            .vertex_attribute_descriptions(&vertex_attribute_descs)
             .build();
 
         let input_assembly_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
@@ -1086,6 +1102,37 @@ impl Iterator for InFlightFrames {
         self.current_frame = (self.current_frame + 1) % self.sync_objects.len();
 
         Some(next)
+    }
+}
+
+struct Vertex {
+    pos: [f32; 2],
+    color: [f32; 3],
+}
+
+impl Vertex {
+    fn get_binding_description() -> vk::VertexInputBindingDescription {
+        vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(20)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build()
+    }
+
+    fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 2] {
+        let position_desc = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(0)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset(0)
+            .build();
+        let color_desc = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(1)
+            .format(vk::Format::R32G32B32_SFLOAT)
+            .offset(8)
+            .build();
+        [position_desc, color_desc]
     }
 }
 

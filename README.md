@@ -173,6 +173,11 @@ get next frame sync objects.
 Handle swapchain recreation when resizing the window or when the swapchain is suboptimal
 or out of date.
 
+### 2.1: Vertex input description
+
+Remove hard coded vertices from the vertex shader source and create vertices on the cpu.
+Update the pipeline with the vertex binding and attributes description.
+
 ## Run it
 
 With validation layers:
