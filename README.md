@@ -178,6 +178,10 @@ or out of date.
 Remove hard coded vertices from the vertex shader source and create vertices on the cpu.
 Update the pipeline with the vertex binding and attributes description.
 
+## 2.2: Vertex buffer creation
+
+Create and fill the vertex buffer and bind it before rendering.
+
 ## Run it
 
 With validation layers:
