@@ -182,6 +182,14 @@ Update the pipeline with the vertex binding and attributes description.
 
 Create and fill the vertex buffer and bind it before rendering.
 
+## 2.3: Staging buffer
+
+Create a staging buffer for the vertex data and copy the vertex data from this buffer's
+memory to the memory of the device local buffer. 
+
+The tutorial also suggests that we allocate command buffers used for memory copy from
+a command pool dedicated to short-lived command buffers, so we did that too.
+
 ## Run it
 
 With validation layers:
