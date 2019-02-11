@@ -190,6 +190,16 @@ memory to the memory of the device local buffer.
 The tutorial also suggests that we allocate command buffers used for memory copy from
 a command pool dedicated to short-lived command buffers, so we did that too.
 
+## 2.4: Index buffer
+
+Use index buffer to reuse vertice when drawing a rectangle.
+
+In the original tutorial the `create_index_buffer` is the same as `create_vertex_buffer`
+but with the vertex data replaced with the index data. To limit duplication we've added
+a method that creates and fill a buffer and fill it with the passed data. This method is
+called from `create_vertex_buffer` and `create_index_buffer`.
+
+
 ## Run it
 
 With validation layers:
