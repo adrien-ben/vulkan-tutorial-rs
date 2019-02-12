@@ -1,4 +1,5 @@
 mod debug;
+mod math;
 mod surface;
 mod swapchain;
 
@@ -10,8 +11,13 @@ use ash::{
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
 };
 use ash::{vk, Device, Entry, Instance};
+use cgmath::{Deg, Matrix4, Point3, Vector3};
 use debug::*;
-use std::ffi::{CStr, CString};
+use std::{
+    ffi::{CStr, CString},
+    mem::{align_of, size_of},
+    time::Instant,
+};
 use swapchain::*;
 use winit::{dpi::LogicalSize, Event, EventsLoop, Window, WindowBuilder, WindowEvent};
 
@@ -40,6 +46,7 @@ const VERTICES: [Vertex; 4] = [
 const INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
 
 struct VulkanApp {
+    start_instant: Instant,
     events_loop: EventsLoop,
     _window: Window,
     resize_dimensions: Option<[u32; 2]>,
@@ -59,6 +66,7 @@ struct VulkanApp {
     images: Vec<vk::Image>,
     swapchain_image_views: Vec<vk::ImageView>,
     render_pass: vk::RenderPass,
+    descriptor_set_layout: vk::DescriptorSetLayout,
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
     swapchain_framebuffers: Vec<vk::Framebuffer>,
@@ -68,6 +76,8 @@ struct VulkanApp {
     vertex_buffer_memory: vk::DeviceMemory,
     index_buffer: vk::Buffer,
     index_buffer_memory: vk::DeviceMemory,
+    uniform_buffers: Vec<vk::Buffer>,
+    uniform_buffer_memories: Vec<vk::DeviceMemory>,
     command_buffers: Vec<vk::CommandBuffer>,
     in_flight_frames: InFlightFrames,
 }
@@ -116,7 +126,9 @@ impl VulkanApp {
             Self::create_swapchain_image_views(&device, &images, properties);
 
         let render_pass = Self::create_render_pass(&device, properties);
-        let (pipeline, layout) = Self::create_pipeline(&device, properties, render_pass);
+        let descriptor_set_layout = Self::create_descriptor_set_layout(&device);
+        let (pipeline, layout) =
+            Self::create_pipeline(&device, properties, render_pass, descriptor_set_layout);
         let swapchain_framebuffers =
             Self::create_framebuffers(&device, &swapchain_image_views, render_pass, properties);
 
@@ -143,6 +155,8 @@ impl VulkanApp {
             transient_command_pool,
             graphics_queue,
         );
+        let (uniform_buffers, uniform_buffer_memories) =
+            Self::create_uniform_buffers(&device, memory_properties, images.len());
 
         let command_buffers = Self::create_and_register_command_buffers(
             &device,
@@ -158,6 +172,7 @@ impl VulkanApp {
         let in_flight_frames = Self::create_sync_objects(&device);
 
         Self {
+            start_instant: Instant::now(),
             events_loop: events_loop,
             _window: window,
             resize_dimensions: None,
@@ -177,6 +192,7 @@ impl VulkanApp {
             images,
             swapchain_image_views,
             render_pass,
+            descriptor_set_layout,
             pipeline_layout: layout,
             pipeline,
             swapchain_framebuffers,
@@ -186,6 +202,8 @@ impl VulkanApp {
             vertex_buffer_memory,
             index_buffer,
             index_buffer_memory,
+            uniform_buffers,
+            uniform_buffer_memories,
             command_buffers,
             in_flight_frames,
         }
@@ -562,10 +580,24 @@ impl VulkanApp {
         unsafe { device.create_render_pass(&render_pass_info, None).unwrap() }
     }
 
+    fn create_descriptor_set_layout(device: &Device) -> vk::DescriptorSetLayout {
+        let bindings = UniformBufferObject::get_descriptor_set_layout_bindings();
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build();
+
+        unsafe {
+            device
+                .create_descriptor_set_layout(&layout_info, None)
+                .unwrap()
+        }
+    }
+
     fn create_pipeline(
         device: &Device,
         swapchain_properties: SwapchainProperties,
         render_pass: vk::RenderPass,
+        descriptor_set_layout: vk::DescriptorSetLayout,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
         let vertex_source = Self::read_shader_from_file("shaders/shader.vert.spv");
         let fragment_source = Self::read_shader_from_file("shaders/shader.frag.spv");
@@ -659,8 +691,9 @@ impl VulkanApp {
             .build();
 
         let layout = {
+            let layouts = [descriptor_set_layout];
             let layout_info = vk::PipelineLayoutCreateInfo::builder()
-                // .set_layouts() null since we don't have uniforms in our shaders
+                .set_layouts(&layouts)
                 // .push_constant_ranges
                 .build();
 
@@ -795,7 +828,7 @@ impl VulkanApp {
         usage: vk::BufferUsageFlags,
         data: &[T],
     ) -> (vk::Buffer, vk::DeviceMemory) {
-        let size = (data.len() * std::mem::size_of::<T>()) as vk::DeviceSize;
+        let size = (data.len() * size_of::<T>()) as vk::DeviceSize;
         let (staging_buffer, staging_memory, staging_mem_size) = Self::create_buffer(
             device,
             mem_properties,
@@ -808,8 +841,7 @@ impl VulkanApp {
             let data_ptr = device
                 .map_memory(staging_memory, 0, size, vk::MemoryMapFlags::empty())
                 .unwrap();
-            let mut align =
-                ash::util::Align::new(data_ptr, std::mem::align_of::<A>() as _, staging_mem_size);
+            let mut align = ash::util::Align::new(data_ptr, align_of::<A>() as _, staging_mem_size);
             align.copy_from_slice(data);
             device.unmap_memory(staging_memory);
         };
@@ -837,6 +869,30 @@ impl VulkanApp {
         };
 
         (buffer, memory)
+    }
+
+    fn create_uniform_buffers(
+        device: &Device,
+        device_mem_properties: vk::PhysicalDeviceMemoryProperties,
+        count: usize,
+    ) -> (Vec<vk::Buffer>, Vec<vk::DeviceMemory>) {
+        let size = size_of::<UniformBufferObject>() as vk::DeviceSize;
+        let mut buffers = Vec::new();
+        let mut memories = Vec::new();
+
+        for _ in 0..count {
+            let (buffer, memory, _) = Self::create_buffer(
+                device,
+                device_mem_properties,
+                size,
+                vk::BufferUsageFlags::UNIFORM_BUFFER,
+                vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+            );
+            buffers.push(buffer);
+            memories.push(memory);
+        }
+
+        (buffers, memories)
     }
 
     /// Create a buffer and allocate its memory.
@@ -1164,6 +1220,8 @@ impl VulkanApp {
 
         unsafe { self.device.reset_fences(&wait_fences).unwrap() };
 
+        self.update_uniform_buffers(image_index);
+
         let wait_semaphores = [image_available_semaphore];
         let signal_semaphores = [render_finished_semaphore];
 
@@ -1254,7 +1312,12 @@ impl VulkanApp {
             Self::create_swapchain_image_views(&self.device, &images, properties);
 
         let render_pass = Self::create_render_pass(&self.device, properties);
-        let (pipeline, layout) = Self::create_pipeline(&self.device, properties, render_pass);
+        let (pipeline, layout) = Self::create_pipeline(
+            &self.device,
+            properties,
+            render_pass,
+            self.descriptor_set_layout,
+        );
         let swapchain_framebuffers = Self::create_framebuffers(
             &self.device,
             &swapchain_image_views,
@@ -1317,6 +1380,36 @@ impl VulkanApp {
             self.swapchain.destroy_swapchain(self.swapchain_khr, None);
         }
     }
+
+    fn update_uniform_buffers(&mut self, current_image: u32) {
+        let elapsed = self.start_instant.elapsed();
+        let elapsed = elapsed.as_secs() as f32 + (elapsed.subsec_millis() as f32) / 1_000 as f32;
+
+        let aspect = self.swapchain_properties.extent.width as f32
+            / self.swapchain_properties.extent.height as f32;
+        let ubo = UniformBufferObject {
+            model: Matrix4::from_angle_z(Deg(90.0 * elapsed)),
+            view: Matrix4::look_at(
+                Point3::new(2.0, 2.0, 2.0),
+                Point3::new(0.0, 0.0, 0.0),
+                Vector3::new(0.0, 0.0, 1.0),
+            ),
+            proj: math::perspective(Deg(45.0), aspect, 0.1, 10.0),
+        };
+        let ubos = [ubo];
+
+        let buffer_mem = self.uniform_buffer_memories[current_image as usize];
+        let size = size_of::<UniformBufferObject>() as vk::DeviceSize;
+        unsafe {
+            let data_ptr = self
+                .device
+                .map_memory(buffer_mem, 0, size, vk::MemoryMapFlags::empty())
+                .unwrap();
+            let mut align = ash::util::Align::new(data_ptr, align_of::<f32>() as _, size);
+            align.copy_from_slice(&ubos);
+            self.device.unmap_memory(buffer_mem);
+        }
+    }
 }
 
 impl Drop for VulkanApp {
@@ -1325,6 +1418,14 @@ impl Drop for VulkanApp {
         self.cleanup_swapchain();
         self.in_flight_frames.destroy(&self.device);
         unsafe {
+            self.device
+                .destroy_descriptor_set_layout(self.descriptor_set_layout, None);
+            self.uniform_buffer_memories
+                .iter()
+                .for_each(|m| self.device.free_memory(*m, None));
+            self.uniform_buffers
+                .iter()
+                .for_each(|b| self.device.destroy_buffer(*b, None));
             self.device.destroy_buffer(self.index_buffer, None);
             self.device.free_memory(self.index_buffer_memory, None);
             self.device.destroy_buffer(self.vertex_buffer, None);
@@ -1425,6 +1526,27 @@ impl Vertex {
             .offset(8)
             .build();
         [position_desc, color_desc]
+    }
+}
+
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+struct UniformBufferObject {
+    model: Matrix4<f32>,
+    view: Matrix4<f32>,
+    proj: Matrix4<f32>,
+}
+
+impl UniformBufferObject {
+    fn get_descriptor_set_layout_bindings() -> [vk::DescriptorSetLayoutBinding; 1] {
+        let ubo_layout_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(vk::ShaderStageFlags::VERTEX)
+            // .immutable_samplers() null since we're not creating a sampler descriptor
+            .build();
+        [ubo_layout_binding]
     }
 }
 
