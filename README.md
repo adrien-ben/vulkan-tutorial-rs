@@ -199,6 +199,13 @@ but with the vertex data replaced with the index data. To limit duplication we'v
 a method that creates and fill a buffer and fill it with the passed data. This method is
 called from `create_vertex_buffer` and `create_index_buffer`.
 
+## 3.1: Descriptor layout and buffer
+
+Create a `UniformBufferObject` structure containing transformation matrices and create the
+descriptor layout and buffers used to make it accessible from the vertex shader.
+
+Also add a `math` module containing a `perspective` function that creates a prespective matrix
+that is working with Vulkan's NDC. 
 
 ## Run it
 
