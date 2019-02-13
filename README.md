@@ -211,6 +211,14 @@ that is working with Vulkan's NDC.
 
 Create a descriptor pool and allocate a descriptor set for each descriptor buffer.
 
+## 4.1: Images
+
+This section is split too.
+
+## 4.1.1: Loading an image
+
+Load an image from a file.
+
 ## Run it
 
 With validation layers:

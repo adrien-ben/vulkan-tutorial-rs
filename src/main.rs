@@ -145,6 +145,8 @@ impl VulkanApp {
             vk::CommandPoolCreateFlags::TRANSIENT,
         );
 
+        let _image = Self::create_texture_image();
+
         let (vertex_buffer, vertex_buffer_memory) = Self::create_vertex_buffer(
             &device,
             memory_properties,
@@ -855,6 +857,10 @@ impl VulkanApp {
                 .create_command_pool(&command_pool_info, None)
                 .unwrap()
         }
+    }
+
+    fn create_texture_image() {
+        let _image = image::open("images/statue.jpg").unwrap();
     }
 
     fn create_vertex_buffer(
