@@ -207,6 +207,10 @@ descriptor layout and buffers used to make it accessible from the vertex shader.
 Also add a `math` module containing a `perspective` function that creates a prespective matrix
 that is working with Vulkan's NDC. 
 
+## 3.2: Descriptor pool and sets
+
+Create a descriptor pool and allocate a descriptor set for each descriptor buffer.
+
 ## Run it
 
 With validation layers:

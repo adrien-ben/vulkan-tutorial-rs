@@ -78,6 +78,8 @@ struct VulkanApp {
     index_buffer_memory: vk::DeviceMemory,
     uniform_buffers: Vec<vk::Buffer>,
     uniform_buffer_memories: Vec<vk::DeviceMemory>,
+    descriptor_pool: vk::DescriptorPool,
+    descriptor_sets: Vec<vk::DescriptorSet>,
     command_buffers: Vec<vk::CommandBuffer>,
     in_flight_frames: InFlightFrames,
 }
@@ -158,6 +160,14 @@ impl VulkanApp {
         let (uniform_buffers, uniform_buffer_memories) =
             Self::create_uniform_buffers(&device, memory_properties, images.len());
 
+        let descriptor_pool = Self::create_descriptor_pool(&device, images.len() as _);
+        let descriptor_sets = Self::create_descriptor_sets(
+            &device,
+            descriptor_pool,
+            descriptor_set_layout,
+            &uniform_buffers,
+        );
+
         let command_buffers = Self::create_and_register_command_buffers(
             &device,
             command_pool,
@@ -166,6 +176,8 @@ impl VulkanApp {
             properties,
             vertex_buffer,
             index_buffer,
+            layout,
+            &descriptor_sets,
             pipeline,
         );
 
@@ -204,6 +216,8 @@ impl VulkanApp {
             index_buffer_memory,
             uniform_buffers,
             uniform_buffer_memories,
+            descriptor_pool,
+            descriptor_sets,
             command_buffers,
             in_flight_frames,
         }
@@ -593,6 +607,67 @@ impl VulkanApp {
         }
     }
 
+    /// Create a descriptor pool to allocate the descriptor sets.
+    fn create_descriptor_pool(device: &Device, size: u32) -> vk::DescriptorPool {
+        let pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::UNIFORM_BUFFER,
+            descriptor_count: size,
+        };
+        let pool_sizes = [pool_size];
+
+        let pool_info = vk::DescriptorPoolCreateInfo::builder()
+            .pool_sizes(&pool_sizes)
+            .max_sets(size)
+            .build();
+
+        unsafe { device.create_descriptor_pool(&pool_info, None).unwrap() }
+    }
+
+    /// Create one descriptor set for each uniform buffer.
+    fn create_descriptor_sets(
+        device: &Device,
+        pool: vk::DescriptorPool,
+        layout: vk::DescriptorSetLayout,
+        uniform_buffers: &[vk::Buffer],
+    ) -> Vec<vk::DescriptorSet> {
+        let layouts = (0..uniform_buffers.len())
+            .map(|_| layout)
+            .collect::<Vec<_>>();
+        let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+            .descriptor_pool(pool)
+            .set_layouts(&layouts)
+            .build();
+        let descriptor_sets = unsafe { device.allocate_descriptor_sets(&alloc_info).unwrap() };
+
+        descriptor_sets
+            .iter()
+            .zip(uniform_buffers.iter())
+            .for_each(|(set, buffer)| {
+                let buffer_info = vk::DescriptorBufferInfo::builder()
+                    .buffer(*buffer)
+                    .offset(0)
+                    .range(size_of::<UniformBufferObject>() as vk::DeviceSize)
+                    .build();
+                let buffer_infos = [buffer_info];
+
+                let descriptor_write = vk::WriteDescriptorSet::builder()
+                    .dst_set(*set)
+                    .dst_binding(0)
+                    .dst_array_element(0)
+                    .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                    .buffer_info(&buffer_infos)
+                    // .image_info() null since we're not updating an image
+                    // .texel_buffer_view() .image_info() null since we're not updating a buffer view
+                    .build();
+                let descriptor_writes = [descriptor_write];
+                let null = [];
+
+                unsafe { device.update_descriptor_sets(&descriptor_writes, &null) }
+            });
+
+        descriptor_sets
+    }
+
     fn create_pipeline(
         device: &Device,
         swapchain_properties: SwapchainProperties,
@@ -655,7 +730,7 @@ impl VulkanApp {
             .polygon_mode(vk::PolygonMode::FILL)
             .line_width(1.0)
             .cull_mode(vk::CullModeFlags::BACK)
-            .front_face(vk::FrontFace::CLOCKWISE)
+            .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
             .depth_bias_enable(false)
             .depth_bias_constant_factor(0.0)
             .depth_bias_clamp(0.0)
@@ -1034,6 +1109,8 @@ impl VulkanApp {
         swapchain_properties: SwapchainProperties,
         vertex_buffer: vk::Buffer,
         index_buffer: vk::Buffer,
+        pipeline_layout: vk::PipelineLayout,
+        descriptor_sets: &[vk::DescriptorSet],
         graphics_pipeline: vk::Pipeline,
     ) -> Vec<vk::CommandBuffer> {
         let allocate_info = vk::CommandBufferAllocateInfo::builder()
@@ -1044,79 +1121,84 @@ impl VulkanApp {
 
         let buffers = unsafe { device.allocate_command_buffers(&allocate_info).unwrap() };
 
-        buffers
-            .iter()
-            .zip(framebuffers.iter())
-            .for_each(|(buffer, framebuffer)| {
-                let buffer = *buffer;
+        buffers.iter().enumerate().for_each(|(i, buffer)| {
+            let buffer = *buffer;
+            let framebuffer = framebuffers[i];
 
-                // begin command buffer
-                {
-                    let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
-                        .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
-                        // .inheritance_info() null since it's a primary command buffer
-                        .build();
-                    unsafe {
-                        device
-                            .begin_command_buffer(buffer, &command_buffer_begin_info)
-                            .unwrap()
-                    };
-                }
-
-                // begin render pass
-                {
-                    let clear_values = [vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.0, 0.0, 0.0, 1.0],
-                        },
-                    }];
-                    let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-                        .render_pass(render_pass)
-                        .framebuffer(*framebuffer)
-                        .render_area(vk::Rect2D {
-                            offset: vk::Offset2D { x: 0, y: 0 },
-                            extent: swapchain_properties.extent,
-                        })
-                        .clear_values(&clear_values)
-                        .build();
-
-                    unsafe {
-                        device.cmd_begin_render_pass(
-                            buffer,
-                            &render_pass_begin_info,
-                            vk::SubpassContents::INLINE,
-                        )
-                    };
-                }
-
-                // Bind pipeline
+            // begin command buffer
+            {
+                let command_buffer_begin_info = vk::CommandBufferBeginInfo::builder()
+                    .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
+                    // .inheritance_info() null since it's a primary command buffer
+                    .build();
                 unsafe {
-                    device.cmd_bind_pipeline(
+                    device
+                        .begin_command_buffer(buffer, &command_buffer_begin_info)
+                        .unwrap()
+                };
+            }
+
+            // begin render pass
+            {
+                let clear_values = [vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
+                    },
+                }];
+                let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+                    .render_pass(render_pass)
+                    .framebuffer(framebuffer)
+                    .render_area(vk::Rect2D {
+                        offset: vk::Offset2D { x: 0, y: 0 },
+                        extent: swapchain_properties.extent,
+                    })
+                    .clear_values(&clear_values)
+                    .build();
+
+                unsafe {
+                    device.cmd_begin_render_pass(
                         buffer,
-                        vk::PipelineBindPoint::GRAPHICS,
-                        graphics_pipeline,
+                        &render_pass_begin_info,
+                        vk::SubpassContents::INLINE,
                     )
                 };
+            }
 
-                // Bind vertex buffer
-                let vertex_buffers = [vertex_buffer];
-                let offsets = [0];
-                unsafe { device.cmd_bind_vertex_buffers(buffer, 0, &vertex_buffers, &offsets) };
+            // Bind pipeline
+            unsafe {
+                device.cmd_bind_pipeline(buffer, vk::PipelineBindPoint::GRAPHICS, graphics_pipeline)
+            };
 
-                // Bind index buffer
-                unsafe {
-                    device.cmd_bind_index_buffer(buffer, index_buffer, 0, vk::IndexType::UINT16)
-                };
+            // Bind vertex buffer
+            let vertex_buffers = [vertex_buffer];
+            let offsets = [0];
+            unsafe { device.cmd_bind_vertex_buffers(buffer, 0, &vertex_buffers, &offsets) };
 
-                // Draw
-                unsafe { device.cmd_draw_indexed(buffer, INDICES.len() as _, 1, 0, 0, 0) };
+            // Bind index buffer
+            unsafe { device.cmd_bind_index_buffer(buffer, index_buffer, 0, vk::IndexType::UINT16) };
 
-                // End render pass
-                unsafe { device.cmd_end_render_pass(buffer) };
+            // Bind descriptor set
+            unsafe {
+                let null = [];
+                device.cmd_bind_descriptor_sets(
+                    buffer,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    pipeline_layout,
+                    0,
+                    &descriptor_sets[i..=i],
+                    &null,
+                )
+            };
 
-                // End command buffer
-                unsafe { device.end_command_buffer(buffer).unwrap() };
-            });
+            // Draw
+            unsafe { device.cmd_draw_indexed(buffer, INDICES.len() as _, 1, 0, 0, 0) };
+
+            // End render pass
+            unsafe { device.cmd_end_render_pass(buffer) };
+
+            // End command buffer
+            unsafe { device.end_command_buffer(buffer).unwrap() };
+        });
 
         buffers
     }
@@ -1333,6 +1415,8 @@ impl VulkanApp {
             properties,
             self.vertex_buffer,
             self.index_buffer,
+            layout,
+            &self.descriptor_sets,
             pipeline,
         );
 
@@ -1418,6 +1502,8 @@ impl Drop for VulkanApp {
         self.cleanup_swapchain();
         self.in_flight_frames.destroy(&self.device);
         unsafe {
+            self.device
+                .destroy_descriptor_pool(self.descriptor_pool, None);
             self.device
                 .destroy_descriptor_set_layout(self.descriptor_set_layout, None);
             self.uniform_buffer_memories
