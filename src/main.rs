@@ -72,6 +72,8 @@ struct VulkanApp {
     swapchain_framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
     transient_command_pool: vk::CommandPool,
+    texture_image: vk::Image,
+    texture_image_memory: vk::DeviceMemory,
     vertex_buffer: vk::Buffer,
     vertex_buffer_memory: vk::DeviceMemory,
     index_buffer: vk::Buffer,
@@ -145,7 +147,8 @@ impl VulkanApp {
             vk::CommandPoolCreateFlags::TRANSIENT,
         );
 
-        let _image = Self::create_texture_image();
+        let (texture_image, texture_image_memory) =
+            Self::create_texture_image(&device, memory_properties);
 
         let (vertex_buffer, vertex_buffer_memory) = Self::create_vertex_buffer(
             &device,
@@ -212,6 +215,8 @@ impl VulkanApp {
             swapchain_framebuffers,
             command_pool,
             transient_command_pool,
+            texture_image,
+            texture_image_memory,
             vertex_buffer,
             vertex_buffer_memory,
             index_buffer,
@@ -859,8 +864,97 @@ impl VulkanApp {
         }
     }
 
-    fn create_texture_image() {
-        let _image = image::open("images/statue.jpg").unwrap();
+    fn create_texture_image(
+        device: &Device,
+        device_mem_properties: vk::PhysicalDeviceMemoryProperties,
+    ) -> (vk::Image, vk::DeviceMemory) {
+        let image = image::open("images/statue.jpg").unwrap();
+        let image_as_rgb = image.to_rgba();
+        let image_width = (&image_as_rgb).width();
+        let image_height = (&image_as_rgb).height();
+        let pixels = image_as_rgb.into_raw();
+        let image_size = (pixels.len() * size_of::<u8>()) as vk::DeviceSize;
+
+        let (buffer, memory, mem_size) = Self::create_buffer(
+            device,
+            device_mem_properties,
+            image_size,
+            vk::BufferUsageFlags::TRANSFER_SRC,
+            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT,
+        );
+
+        unsafe {
+            let ptr = device
+                .map_memory(memory, 0, image_size, vk::MemoryMapFlags::empty())
+                .unwrap();
+            let mut align = ash::util::Align::new(ptr, align_of::<u8>() as _, mem_size);
+            align.copy_from_slice(&pixels);
+            device.unmap_memory(memory);
+        }
+
+        let (image, image_memory) = Self::create_image(
+            device,
+            device_mem_properties,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            image_width,
+            image_height,
+            vk::Format::R8G8B8A8_UNORM,
+            vk::ImageTiling::OPTIMAL,
+            vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::SAMPLED,
+        );
+
+        unsafe {
+            device.destroy_buffer(buffer, None);
+            device.free_memory(memory, None);
+        }
+        
+        (image, image_memory)
+    }
+
+    fn create_image(
+        device: &Device,
+        device_mem_properties: vk::PhysicalDeviceMemoryProperties,
+        mem_properties: vk::MemoryPropertyFlags,
+        width: u32,
+        height: u32,
+        format: vk::Format,
+        tiling: vk::ImageTiling,
+        usage: vk::ImageUsageFlags,
+    ) -> (vk::Image, vk::DeviceMemory) {
+        let image_info = vk::ImageCreateInfo::builder()
+            .image_type(vk::ImageType::TYPE_2D)
+            .extent(vk::Extent3D {
+                width: width,
+                height: height,
+                depth: 1,
+            })
+            .mip_levels(1)
+            .array_layers(1)
+            .format(format)
+            .tiling(tiling)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .usage(usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .flags(vk::ImageCreateFlags::empty())
+            .build();
+
+        let image = unsafe { device.create_image(&image_info, None).unwrap() };
+        let mem_requirements = unsafe { device.get_image_memory_requirements(image) };
+        let mem_type_index =
+            Self::find_memory_type(mem_requirements, device_mem_properties, mem_properties);
+
+        let alloc_info = vk::MemoryAllocateInfo::builder()
+            .allocation_size(mem_requirements.size)
+            .memory_type_index(mem_type_index)
+            .build();
+        let memory = unsafe {
+            let mem = device.allocate_memory(&alloc_info, None).unwrap();
+            device.bind_image_memory(image, mem, 0).unwrap();
+            mem
+        };
+
+        (image, memory)
     }
 
     fn create_vertex_buffer(
@@ -1522,6 +1616,8 @@ impl Drop for VulkanApp {
             self.device.free_memory(self.index_buffer_memory, None);
             self.device.destroy_buffer(self.vertex_buffer, None);
             self.device.free_memory(self.vertex_buffer_memory, None);
+            self.device.destroy_image(self.texture_image, None);
+            self.device.free_memory(self.texture_image_memory, None);
             self.device
                 .destroy_command_pool(self.transient_command_pool, None);
             self.device.destroy_command_pool(self.command_pool, None);
