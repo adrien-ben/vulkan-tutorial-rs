@@ -24,23 +24,26 @@ use winit::{dpi::LogicalSize, Event, EventsLoop, Window, WindowBuilder, WindowEv
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
-const VERTEX_SIZE: usize = 20;
 const VERTICES: [Vertex; 4] = [
     Vertex {
         pos: [-0.5, -0.5],
-        color: [1.0, 0.0, 0.0],
+        color: [1.0, 1.0, 1.0],
+        coords: [0.0, 0.0],
     },
     Vertex {
         pos: [0.5, -0.5],
-        color: [0.0, 1.0, 0.0],
+        color: [1.0, 1.0, 1.0],
+        coords: [1.0, 0.0],
     },
     Vertex {
         pos: [0.5, 0.5],
-        color: [0.0, 0.0, 1.0],
+        color: [1.0, 1.0, 1.0],
+        coords: [1.0, 1.0],
     },
     Vertex {
         pos: [-0.5, 0.5],
         color: [1.0, 1.0, 1.0],
+        coords: [0.0, 1.0],
     },
 ];
 const INDICES: [u16; 6] = [0, 1, 2, 2, 3, 0];
@@ -175,6 +178,8 @@ impl VulkanApp {
             descriptor_pool,
             descriptor_set_layout,
             &uniform_buffers,
+            texture_image_view,
+            texture_image_sampler,
         );
 
         let command_buffers = Self::create_and_register_command_buffers(
@@ -613,7 +618,15 @@ impl VulkanApp {
     }
 
     fn create_descriptor_set_layout(device: &Device) -> vk::DescriptorSetLayout {
-        let bindings = UniformBufferObject::get_descriptor_set_layout_bindings();
+        let ubo_binding = UniformBufferObject::get_descriptor_set_layout_binding();
+        let sampler_binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_count(1)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .stage_flags(vk::ShaderStageFlags::FRAGMENT)
+            .build();
+        let bindings = [ubo_binding, sampler_binding];
+
         let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
             .bindings(&bindings)
             .build();
@@ -627,11 +640,16 @@ impl VulkanApp {
 
     /// Create a descriptor pool to allocate the descriptor sets.
     fn create_descriptor_pool(device: &Device, size: u32) -> vk::DescriptorPool {
-        let pool_size = vk::DescriptorPoolSize {
+        let ubo_pool_size = vk::DescriptorPoolSize {
             ty: vk::DescriptorType::UNIFORM_BUFFER,
             descriptor_count: size,
         };
-        let pool_sizes = [pool_size];
+        let sampler_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+            descriptor_count: size,
+        };
+
+        let pool_sizes = [ubo_pool_size, sampler_pool_size];
 
         let pool_info = vk::DescriptorPoolCreateInfo::builder()
             .pool_sizes(&pool_sizes)
@@ -647,6 +665,8 @@ impl VulkanApp {
         pool: vk::DescriptorPool,
         layout: vk::DescriptorSetLayout,
         uniform_buffers: &[vk::Buffer],
+        image_view: vk::ImageView,
+        sampler: vk::Sampler,
     ) -> Vec<vk::DescriptorSet> {
         let layouts = (0..uniform_buffers.len())
             .map(|_| layout)
@@ -668,19 +688,31 @@ impl VulkanApp {
                     .build();
                 let buffer_infos = [buffer_info];
 
-                let descriptor_write = vk::WriteDescriptorSet::builder()
+                let image_info = vk::DescriptorImageInfo::builder()
+                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .image_view(image_view)
+                    .sampler(sampler)
+                    .build();
+                let image_infos = [image_info];
+
+                let ubo_descriptor_write = vk::WriteDescriptorSet::builder()
                     .dst_set(*set)
                     .dst_binding(0)
                     .dst_array_element(0)
                     .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
                     .buffer_info(&buffer_infos)
-                    // .image_info() null since we're not updating an image
-                    // .texel_buffer_view() .image_info() null since we're not updating a buffer view
                     .build();
-                let descriptor_writes = [descriptor_write];
-                let null = [];
+                let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
+                    .dst_set(*set)
+                    .dst_binding(1)
+                    .dst_array_element(0)
+                    .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                    .image_info(&image_infos)
+                    .build();
 
-                unsafe { device.update_descriptor_sets(&descriptor_writes, &null) }
+                let descriptor_writes = [ubo_descriptor_write, sampler_descriptor_write];
+
+                unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
             });
 
         descriptor_sets
@@ -1881,18 +1913,19 @@ impl Iterator for InFlightFrames {
 struct Vertex {
     pos: [f32; 2],
     color: [f32; 3],
+    coords: [f32; 2],
 }
 
 impl Vertex {
     fn get_binding_description() -> vk::VertexInputBindingDescription {
         vk::VertexInputBindingDescription::builder()
             .binding(0)
-            .stride(VERTEX_SIZE as _)
+            .stride(size_of::<Vertex>() as _)
             .input_rate(vk::VertexInputRate::VERTEX)
             .build()
     }
 
-    fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 2] {
+    fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
         let position_desc = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(0)
@@ -1905,7 +1938,13 @@ impl Vertex {
             .format(vk::Format::R32G32B32_SFLOAT)
             .offset(8)
             .build();
-        [position_desc, color_desc]
+        let coords_desc = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(2)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset(20)
+            .build();
+        [position_desc, color_desc, coords_desc]
     }
 }
 
@@ -1918,15 +1957,14 @@ struct UniformBufferObject {
 }
 
 impl UniformBufferObject {
-    fn get_descriptor_set_layout_bindings() -> [vk::DescriptorSetLayoutBinding; 1] {
-        let ubo_layout_binding = vk::DescriptorSetLayoutBinding::builder()
+    fn get_descriptor_set_layout_binding() -> vk::DescriptorSetLayoutBinding {
+        vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
             .descriptor_count(1)
             .stage_flags(vk::ShaderStageFlags::VERTEX)
             // .immutable_samplers() null since we're not creating a sampler descriptor
-            .build();
-        [ubo_layout_binding]
+            .build()
     }
 }
 

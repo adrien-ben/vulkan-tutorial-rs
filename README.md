@@ -233,6 +233,11 @@ Copy the image data store in the host visible buffer to the device local image.
 
 Create the image view and sampler. Also enable the sampler anisotropy feature.
 
+## 4.3: Combined image sampler
+
+Update the descriptor set, add texture coordinates to `Vertex` and update the 
+shaders to read texture coordinates and sample the texture.
+
 ## Run it
 
 With validation layers:
