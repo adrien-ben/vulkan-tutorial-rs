@@ -74,6 +74,8 @@ struct VulkanApp {
     transient_command_pool: vk::CommandPool,
     texture_image: vk::Image,
     texture_image_memory: vk::DeviceMemory,
+    texture_image_view: vk::ImageView,
+    texture_image_sampler: vk::Sampler,
     vertex_buffer: vk::Buffer,
     vertex_buffer_memory: vk::DeviceMemory,
     index_buffer: vk::Buffer,
@@ -149,6 +151,8 @@ impl VulkanApp {
 
         let (texture_image, texture_image_memory) =
             Self::create_texture_image(&device, memory_properties, command_pool, graphics_queue);
+        let texture_image_view = Self::create_texture_image_view(&device, texture_image);
+        let texture_image_sampler = Self::create_texture_sampler(&device);
 
         let (vertex_buffer, vertex_buffer_memory) = Self::create_vertex_buffer(
             &device,
@@ -217,6 +221,8 @@ impl VulkanApp {
             transient_command_pool,
             texture_image,
             texture_image_memory,
+            texture_image_view,
+            texture_image_sampler,
             vertex_buffer,
             vertex_buffer_memory,
             index_buffer,
@@ -306,7 +312,12 @@ impl VulkanApp {
             let details = SwapchainSupportDetails::new(device, surface, surface_khr);
             !details.formats.is_empty() && !details.present_modes.is_empty()
         };
-        graphics.is_some() && present.is_some() && extention_support && is_swapchain_adequate
+        let features = unsafe { instance.get_physical_device_features(device) };
+        graphics.is_some()
+            && present.is_some()
+            && extention_support
+            && is_swapchain_adequate
+            && features.sampler_anisotropy == vk::TRUE
     }
 
     fn check_device_extension_support(instance: &Instance, device: vk::PhysicalDevice) -> bool {
@@ -414,7 +425,9 @@ impl VulkanApp {
             .map(|ext| ext.as_ptr())
             .collect::<Vec<_>>();
 
-        let device_features = vk::PhysicalDeviceFeatures::builder().build();
+        let device_features = vk::PhysicalDeviceFeatures::builder()
+            .sampler_anisotropy(true)
+            .build();
 
         let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
 
@@ -530,28 +543,26 @@ impl VulkanApp {
         swapchain_images
             .into_iter()
             .map(|image| {
-                let create_info = vk::ImageViewCreateInfo::builder()
-                    .image(*image)
-                    .view_type(vk::ImageViewType::TYPE_2D)
-                    .format(swapchain_properties.format.format)
-                    .components(vk::ComponentMapping {
-                        r: vk::ComponentSwizzle::IDENTITY,
-                        g: vk::ComponentSwizzle::IDENTITY,
-                        b: vk::ComponentSwizzle::IDENTITY,
-                        a: vk::ComponentSwizzle::IDENTITY,
-                    })
-                    .subresource_range(vk::ImageSubresourceRange {
-                        aspect_mask: vk::ImageAspectFlags::COLOR,
-                        base_mip_level: 0,
-                        level_count: 1,
-                        base_array_layer: 0,
-                        layer_count: 1,
-                    })
-                    .build();
-
-                unsafe { device.create_image_view(&create_info, None).unwrap() }
+                Self::create_image_view(device, *image, swapchain_properties.format.format)
             })
             .collect::<Vec<_>>()
+    }
+
+    fn create_image_view(device: &Device, image: vk::Image, format: vk::Format) -> vk::ImageView {
+        let create_info = vk::ImageViewCreateInfo::builder()
+            .image(image)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(format)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .build();
+
+        unsafe { device.create_image_view(&create_info, None).unwrap() }
     }
 
     fn create_render_pass(
@@ -1096,6 +1107,32 @@ impl VulkanApp {
                 )
             }
         })
+    }
+
+    fn create_texture_image_view(device: &Device, image: vk::Image) -> vk::ImageView {
+        Self::create_image_view(device, image, vk::Format::R8G8B8A8_UNORM)
+    }
+
+    fn create_texture_sampler(device: &Device) -> vk::Sampler {
+        let sampler_info = vk::SamplerCreateInfo::builder()
+            .mag_filter(vk::Filter::LINEAR)
+            .min_filter(vk::Filter::LINEAR)
+            .address_mode_u(vk::SamplerAddressMode::REPEAT)
+            .address_mode_v(vk::SamplerAddressMode::REPEAT)
+            .address_mode_w(vk::SamplerAddressMode::REPEAT)
+            .anisotropy_enable(true)
+            .max_anisotropy(16.0)
+            .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+            .unnormalized_coordinates(false)
+            .compare_enable(false)
+            .compare_op(vk::CompareOp::ALWAYS)
+            .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+            .mip_lod_bias(0.0)
+            .min_lod(0.0)
+            .max_lod(0.0)
+            .build();
+
+        unsafe { device.create_sampler(&sampler_info, None).unwrap() }
     }
 
     fn create_vertex_buffer(
@@ -1767,6 +1804,10 @@ impl Drop for VulkanApp {
             self.device.free_memory(self.index_buffer_memory, None);
             self.device.destroy_buffer(self.vertex_buffer, None);
             self.device.free_memory(self.vertex_buffer_memory, None);
+            self.device
+                .destroy_sampler(self.texture_image_sampler, None);
+            self.device
+                .destroy_image_view(self.texture_image_view, None);
             self.device.destroy_image(self.texture_image, None);
             self.device.free_memory(self.texture_image_memory, None);
             self.device

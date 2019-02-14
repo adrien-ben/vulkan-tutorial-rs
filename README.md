@@ -229,6 +229,10 @@ section.
 
 Copy the image data store in the host visible buffer to the device local image.
 
+## 4.2: Image view and sampler
+
+Create the image view and sampler. Also enable the sampler anisotropy feature.
+
 ## Run it
 
 With validation layers:
