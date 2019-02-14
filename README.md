@@ -215,9 +215,15 @@ Create a descriptor pool and allocate a descriptor set for each descriptor buffe
 
 This section is split too.
 
-## 4.1.1: Loading an image
+### 4.1.1: Loading an image
 
 Load an image from a file.
+
+### 4.1.2: Creating the image
+
+Create an host visible staging buffer for image data and create a device local
+image. At this point the image is empty, we will copy the buffer data in a later
+section. 
 
 ## Run it
 
