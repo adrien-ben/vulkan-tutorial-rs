@@ -223,7 +223,11 @@ Load an image from a file.
 
 Create an host visible staging buffer for image data and create a device local
 image. At this point the image is empty, we will copy the buffer data in a later
-section. 
+section.
+
+### 4.1.3: Copying buffer data into the image
+
+Copy the image data store in the host visible buffer to the device local image.
 
 ## Run it
 
