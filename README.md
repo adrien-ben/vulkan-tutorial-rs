@@ -245,6 +245,16 @@ shaders to read texture coordinates and sample the texture.
  so the new quad is renderer correctly relatively to the other. Recreate the
  depth buffer resources when the swapchain is recreated.
 
+ ## 5.extra: Refactoring
+
+ Add `Texture` struct which will hold the resources required by mutable image,
+ (image, memory, view and optionnally a sampler).
+
+ Add `VkContext` that will hold the instance, debug callback, physical and logical
+ devices, and surface.
+
+ Overall refactoring of the code with some Rust specific code smell fixes.
+
 ## Run it
 
 With validation layers:
