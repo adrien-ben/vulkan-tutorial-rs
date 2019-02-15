@@ -238,6 +238,13 @@ Create the image view and sampler. Also enable the sampler anisotropy feature.
 Update the descriptor set, add texture coordinates to `Vertex` and update the 
 shaders to read texture coordinates and sample the texture.
 
+ ## 5: Depth buffering
+
+ Update `Vertex` to make the position 3d. Update the vertex shader to take the
+ new dimension into account. Add a new quad to render. And setup depth buffer
+ so the new quad is renderer correctly relatively to the other. Recreate the
+ depth buffer resources when the swapchain is recreated.
+
 ## Run it
 
 With validation layers:
