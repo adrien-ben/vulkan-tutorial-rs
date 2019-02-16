@@ -255,6 +255,11 @@ shaders to read texture coordinates and sample the texture.
 
  Overall refactoring of the code with some Rust specific code smell fixes.
 
+ ## 6: Loading models
+
+ Load a 3D model from an wavefront obj file and render it. We skip the deduplication
+ step because the crate we use to load obj files already does it.
+
 ## Run it
 
 With validation layers:
