@@ -18,6 +18,7 @@ use cgmath::{Deg, Matrix4, Point3, Vector3};
 use std::{
     ffi::{CStr, CString},
     mem::{align_of, size_of},
+    path::Path,
     time::Instant,
 };
 use winit::{dpi::LogicalSize, Event, EventsLoop, Window, WindowBuilder, WindowEvent};
@@ -25,51 +26,6 @@ use winit::{dpi::LogicalSize, Event, EventsLoop, Window, WindowBuilder, WindowEv
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
-const VERTICES: [Vertex; 8] = [
-    // First quad
-    Vertex {
-        pos: [-0.5, -0.5, 0.0],
-        color: [1.0, 1.0, 1.0],
-        coords: [0.0, 0.0],
-    },
-    Vertex {
-        pos: [0.5, -0.5, 0.0],
-        color: [1.0, 1.0, 1.0],
-        coords: [1.0, 0.0],
-    },
-    Vertex {
-        pos: [0.5, 0.5, 0.0],
-        color: [1.0, 1.0, 1.0],
-        coords: [1.0, 1.0],
-    },
-    Vertex {
-        pos: [-0.5, 0.5, 0.0],
-        color: [1.0, 1.0, 1.0],
-        coords: [0.0, 1.0],
-    },
-    // Second quad
-    Vertex {
-        pos: [-0.5, -0.5, -0.5],
-        color: [1.0, 1.0, 1.0],
-        coords: [0.0, 0.0],
-    },
-    Vertex {
-        pos: [0.5, -0.5, -0.5],
-        color: [1.0, 1.0, 1.0],
-        coords: [1.0, 0.0],
-    },
-    Vertex {
-        pos: [0.5, 0.5, -0.5],
-        color: [1.0, 1.0, 1.0],
-        coords: [1.0, 1.0],
-    },
-    Vertex {
-        pos: [-0.5, 0.5, -0.5],
-        color: [1.0, 1.0, 1.0],
-        coords: [0.0, 1.0],
-    },
-];
-const INDICES: [u16; 12] = [0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4];
 
 struct VulkanApp {
     start_instant: Instant,
@@ -95,6 +51,7 @@ struct VulkanApp {
     depth_format: vk::Format,
     depth_texture: Texture,
     texture: Texture,
+    model_index_count: usize,
     vertex_buffer: vk::Buffer,
     vertex_buffer_memory: vk::DeviceMemory,
     index_buffer: vk::Buffer,
@@ -191,10 +148,19 @@ impl VulkanApp {
 
         let texture = Self::create_texture_image(&vk_context, command_pool, graphics_queue);
 
-        let (vertex_buffer, vertex_buffer_memory) =
-            Self::create_vertex_buffer(&vk_context, transient_command_pool, graphics_queue);
-        let (index_buffer, index_buffer_memory) =
-            Self::create_index_buffer(&vk_context, transient_command_pool, graphics_queue);
+        let (vertices, indices) = Self::load_model();
+        let (vertex_buffer, vertex_buffer_memory) = Self::create_vertex_buffer(
+            &vk_context,
+            transient_command_pool,
+            graphics_queue,
+            &vertices,
+        );
+        let (index_buffer, index_buffer_memory) = Self::create_index_buffer(
+            &vk_context,
+            transient_command_pool,
+            graphics_queue,
+            &indices,
+        );
         let (uniform_buffers, uniform_buffer_memories) =
             Self::create_uniform_buffers(&vk_context, images.len());
 
@@ -215,6 +181,7 @@ impl VulkanApp {
             properties,
             vertex_buffer,
             index_buffer,
+            indices.len(),
             layout,
             &descriptor_sets,
             pipeline,
@@ -246,6 +213,7 @@ impl VulkanApp {
             depth_format,
             depth_texture,
             texture,
+            model_index_count: indices.len(),
             vertex_buffer,
             vertex_buffer_memory,
             index_buffer,
@@ -1024,7 +992,7 @@ impl VulkanApp {
         command_pool: vk::CommandPool,
         copy_queue: vk::Queue,
     ) -> Texture {
-        let image = image::open("images/statue.jpg").unwrap();
+        let image = image::open("images/chalet.jpg").unwrap().flipv();
         let image_as_rgb = image.to_rgba();
         let extent = vk::Extent2D {
             width: (&image_as_rgb).width(),
@@ -1294,17 +1262,46 @@ impl VulkanApp {
         })
     }
 
+    fn load_model() -> (Vec<Vertex>, Vec<u32>) {
+        log::debug!("Loading model.");
+        let (models, _) = tobj::load_obj(&Path::new("models/chalet.obj")).unwrap();
+
+        let mesh = &models[0].mesh;
+        let positions = mesh.positions.as_slice();
+        let coords = mesh.texcoords.as_slice();
+        let vertex_count = mesh.positions.len() / 3;
+
+        let mut vertices = Vec::with_capacity(vertex_count);
+        for i in 0..vertex_count {
+            let x = positions[i * 3];
+            let y = positions[i * 3 + 1];
+            let z = positions[i * 3 + 2];
+            let u = coords[i * 2];
+            let v = coords[i * 2 + 1];
+
+            let vertex = Vertex {
+                pos: [x, y, z],
+                color: [1.0, 1.0, 1.0],
+                coords: [u, v],
+            };
+            vertices.push(vertex);
+        }
+
+        (vertices, mesh.indices.clone())
+    }
+
     fn create_vertex_buffer(
         vk_context: &VkContext,
         command_pool: vk::CommandPool,
         transfer_queue: vk::Queue,
+        vertices: &[Vertex],
     ) -> (vk::Buffer, vk::DeviceMemory) {
         Self::create_device_local_buffer_with_data::<u32, _>(
             vk_context,
             command_pool,
             transfer_queue,
             vk::BufferUsageFlags::VERTEX_BUFFER,
-            &VERTICES,
+            vertices,
         )
     }
 
@@ -1312,13 +1309,14 @@ impl VulkanApp {
         vk_context: &VkContext,
         command_pool: vk::CommandPool,
         transfer_queue: vk::Queue,
+        indices: &[u32],
     ) -> (vk::Buffer, vk::DeviceMemory) {
         Self::create_device_local_buffer_with_data::<u16, _>(
             vk_context,
             command_pool,
             transfer_queue,
             vk::BufferUsageFlags::INDEX_BUFFER,
-            &INDICES,
+            indices,
         )
     }
 
@@ -1551,6 +1549,7 @@ impl VulkanApp {
         swapchain_properties: SwapchainProperties,
         vertex_buffer: vk::Buffer,
         index_buffer: vk::Buffer,
+        index_count: usize,
         pipeline_layout: vk::PipelineLayout,
         descriptor_sets: &[vk::DescriptorSet],
         graphics_pipeline: vk::Pipeline,
@@ -1625,7 +1624,7 @@ impl VulkanApp {
             unsafe { device.cmd_bind_vertex_buffers(buffer, 0, &vertex_buffers, &offsets) };
 
             // Bind index buffer
-            unsafe { device.cmd_bind_index_buffer(buffer, index_buffer, 0, vk::IndexType::UINT16) };
+            unsafe { device.cmd_bind_index_buffer(buffer, index_buffer, 0, vk::IndexType::UINT32) };
 
             // Bind descriptor set
             unsafe {
@@ -1641,7 +1640,7 @@ impl VulkanApp {
             };
 
             // Draw
-            unsafe { device.cmd_draw_indexed(buffer, INDICES.len() as _, 1, 0, 0, 0) };
+            unsafe { device.cmd_draw_indexed(buffer, index_count as _, 1, 0, 0, 0) };
 
             // End render pass
             unsafe { device.cmd_end_render_pass(buffer) };
@@ -1870,6 +1869,7 @@ impl VulkanApp {
             properties,
             self.vertex_buffer,
             self.index_buffer,
+            self.model_index_count,
             layout,
             &self.descriptor_sets,
             pipeline,
