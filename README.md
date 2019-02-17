@@ -260,6 +260,15 @@ shaders to read texture coordinates and sample the texture.
  Load a 3D model from an wavefront obj file and render it. We skip the deduplication
  step because the crate we use to load obj files already does it.
 
+ ## 6.extra: Orbital camera
+
+Since `3.1: Descriptor layout and buffer`, our rendered geometry has been spinning
+infinitely around its local z axis. In this chapter we change this behaviour and
+implement an orbital camera controlled with the mouse.
+
+You can scroll the mouse wheel to get closer or further away from the global origin.
+And you can left click and move the mouse to move around the global origin.
+
 ## Run it
 
 With validation layers:

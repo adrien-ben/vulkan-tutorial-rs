@@ -1,3 +1,4 @@
+mod camera;
 mod context;
 mod debug;
 mod math;
@@ -5,7 +6,7 @@ mod surface;
 mod swapchain;
 mod texture;
 
-use crate::{context::*, debug::*, swapchain::*, texture::*};
+use crate::{camera::*, context::*, debug::*, swapchain::*, texture::*};
 use ash::{
     extensions::{
         ext::DebugReport,
@@ -19,19 +20,27 @@ use std::{
     ffi::{CStr, CString},
     mem::{align_of, size_of},
     path::Path,
-    time::Instant,
 };
-use winit::{dpi::LogicalSize, Event, EventsLoop, Window, WindowBuilder, WindowEvent};
+use winit::{
+    dpi::LogicalSize, ElementState, Event, EventsLoop, MouseButton, MouseScrollDelta, Window,
+    WindowBuilder, WindowEvent,
+};
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
 struct VulkanApp {
-    start_instant: Instant,
     events_loop: EventsLoop,
     _window: Window,
     resize_dimensions: Option<[u32; 2]>,
+
+    camera: Camera,
+    is_left_clicked: bool,
+    cursor_position: [i32; 2],
+    cursor_delta: Option<[i32; 2]>,
+    wheel_delta: Option<f32>,
+
     vk_context: VkContext,
     queue_families_indices: QueueFamiliesIndices,
     graphics_queue: vk::Queue,
@@ -190,10 +199,14 @@ impl VulkanApp {
         let in_flight_frames = Self::create_sync_objects(vk_context.device());
 
         Self {
-            start_instant: Instant::now(),
             events_loop,
             _window: window,
             resize_dimensions: None,
+            camera: Default::default(),
+            is_left_clicked: false,
+            cursor_position: [0, 0],
+            cursor_delta: None,
+            wheel_delta: None,
             vk_context,
             queue_families_indices,
             graphics_queue,
@@ -1699,22 +1712,57 @@ impl VulkanApp {
     fn process_event(&mut self) -> bool {
         let mut should_stop = false;
         let mut resize_dimensions = None;
+        let mut is_left_clicked = None;
+        let mut cursor_position = None;
+        let mut wheel_delta = None;
+
         self.events_loop.poll_events(|event| match event {
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                should_stop = true;
-            }
-            Event::WindowEvent {
-                event: WindowEvent::Resized(LogicalSize { width, height }),
-                ..
-            } => {
-                resize_dimensions = Some([width as u32, height as u32]);
-            }
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested => should_stop = true,
+                WindowEvent::Resized(LogicalSize { width, height }) => {
+                    resize_dimensions = Some([width as u32, height as u32]);
+                }
+                WindowEvent::MouseInput {
+                    button: MouseButton::Left,
+                    state,
+                    ..
+                } => {
+                    if state == ElementState::Pressed {
+                        is_left_clicked = Some(true);
+                    } else {
+                        is_left_clicked = Some(false);
+                    }
+                }
+                WindowEvent::CursorMoved { position, .. } => {
+                    let position: (i32, i32) = position.into();
+                    cursor_position = Some([position.0, position.1]);
+                }
+                WindowEvent::MouseWheel {
+                    delta: MouseScrollDelta::LineDelta(_, v_lines),
+                    ..
+                } => {
+                    wheel_delta = Some(v_lines);
+                }
+                _ => {}
+            },
             _ => {}
         });
+
         self.resize_dimensions = resize_dimensions;
+        if let Some(is_left_clicked) = is_left_clicked {
+            self.is_left_clicked = is_left_clicked;
+        }
+        if let Some(position) = cursor_position {
+            let last_position = self.cursor_position;
+            self.cursor_position = position;
+            self.cursor_delta = Some([
+                position[0] - last_position[0],
+                position[1] - last_position[1],
+            ]);
+        } else {
+            self.cursor_delta = None;
+        }
+        self.wheel_delta = wheel_delta;
         should_stop
     }
 
@@ -1922,17 +1970,26 @@ impl VulkanApp {
     }
 
     fn update_uniform_buffers(&mut self, current_image: u32) {
-        let elapsed = self.start_instant.elapsed();
-        let elapsed = elapsed.as_secs() as f32 + (elapsed.subsec_millis() as f32) / 1_000 as f32;
+        if self.is_left_clicked && self.cursor_delta.is_some() {
+            let delta = self.cursor_delta.take().unwrap();
+            let x_ratio = delta[0] as f32 / self.swapchain_properties.extent.width as f32;
+            let y_ratio = delta[1] as f32 / self.swapchain_properties.extent.height as f32;
+            let theta = x_ratio * 180.0_f32.to_radians();
+            let phi = y_ratio * 90.0_f32.to_radians();
+            self.camera.rotate(theta, phi);
+        }
+        if let Some(wheel_delta) = self.wheel_delta {
+            self.camera.forward(wheel_delta * 0.3);
+        }
 
         let aspect = self.swapchain_properties.extent.width as f32
             / self.swapchain_properties.extent.height as f32;
         let ubo = UniformBufferObject {
-            model: Matrix4::from_angle_z(Deg(90.0 * elapsed)),
+            model: Matrix4::from_angle_x(Deg(270.0)),
             view: Matrix4::look_at(
-                Point3::new(2.0, 2.0, 2.0),
+                self.camera.position(),
                 Point3::new(0.0, 0.0, 0.0),
-                Vector3::new(0.0, 0.0, 1.0),
+                Vector3::new(0.0, 1.0, 0.0),
             ),
             proj: math::perspective(Deg(45.0), aspect, 0.1, 10.0),
         };
