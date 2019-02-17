@@ -41,3 +41,13 @@ where
         c3r0, c3r1, c3r2, c3r3,
     )
 }
+
+/// Clamp `value` between `min` and `max`.
+pub fn clamp<T: PartialOrd>(value: T, min: T, max: T) -> T {
+    let value = if value > max { max } else { value };
+    if value < min {
+        min
+    } else {
+        value
+    }
+}
