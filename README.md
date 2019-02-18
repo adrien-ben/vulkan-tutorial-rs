@@ -269,6 +269,10 @@ implement an orbital camera controlled with the mouse.
 You can scroll the mouse wheel to get closer or further away from the global origin.
 And you can left click and move the mouse to move around the global origin.
 
+## 7: Generating mpimaps
+
+Generate mipmaps for the model texture and update the sampler to make use of them.
+
 ## Run it
 
 With validation layers:
