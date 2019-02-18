@@ -2,6 +2,8 @@
 
 Vulkan [tutorials][0] written in Rust using [Ash][1].
 
+![The end result](screenshots/end.png)
+
 ## Introduction
 
 This repository will follow the structure of the original tutorial. Each 
@@ -157,6 +159,8 @@ to signal that the rendering to the image is finished.
 Acquire the next image from the swapchain, submit the command buffer and
 present the rendered image.
 
+![The first triangle!](screenshots/triangle.png)
+
 - 1.4.3.4: Frames in flight
 
 Limit the number of frames that can be renderer simultaneously using fences.
@@ -201,6 +205,8 @@ but with the vertex data replaced with the index data. To limit duplication we'v
 a method that creates and fill a buffer and fill it with the passed data. This method is
 called from `create_vertex_buffer` and `create_index_buffer`.
 
+![Then a quad.](screenshots/quad.png)
+
 ### 3.1: Descriptor layout and buffer
 
 Create a `UniformBufferObject` structure containing transformation matrices and create the
@@ -212,6 +218,8 @@ that is working with Vulkan's NDC.
 ### 3.2: Descriptor pool and sets
 
 Create a descriptor pool and allocate a descriptor set for each descriptor buffer.
+
+![With MVP matrices.](screenshots/ubo.png)
 
 ### 4.1: Images
 
@@ -240,12 +248,16 @@ Create the image view and sampler. Also enable the sampler anisotropy feature.
 Update the descriptor set, add texture coordinates to `Vertex` and update the 
 shaders to read texture coordinates and sample the texture.
 
+![Textured.](screenshots/texture.png)
+
 ### 5: Depth buffering
 
  Update `Vertex` to make the position 3d. Update the vertex shader to take the
  new dimension into account. Add a new quad to render. And setup depth buffer
  so the new quad is renderer correctly relatively to the other. Recreate the
  depth buffer resources when the swapchain is recreated.
+
+![With a friend!](screenshots/depth.png)
 
 ### 5.extra: Refactoring
 
@@ -279,6 +291,8 @@ Generate mipmaps for the model texture and update the sampler to make use of the
 
 Add multisampling anti-aliasing.
 
+![The end result](screenshots/end.png)
+
 ## Run it
 
 With validation layers:
@@ -298,13 +312,24 @@ cargo run --release
 ## Links
 
 [Vulkan tutotial][0]
+
 [Ash][1]
+
 [Rust docs][4]
+
 [Cargo docs][2]
+
 [Vulkan SDK][3]
+
 [Vulkan specs][5]
+
 [The image statue][6]
+
 [The 3D model][7]
+
+## Credits
+
+Thanks to Alexander Overvoorde for this amazing tutorials.
 
 [0]: https://vulkan-tutorial.com/Introduction
 [1]: https://github.com/MaikKlein/ash
