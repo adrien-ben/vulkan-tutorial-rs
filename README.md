@@ -8,7 +8,9 @@ This repository will follow the structure of the original tutorial. Each
 commit will correspond to one page or on section of the page for 
 long chapters.
 
-Sometimes an 'extra' commit will be added with some refactoring or commenting.
+Sometimes an 'extra' commit will be added with some refactoring, commenting or feature.
+
+All chapters of the original tutorial are now covered.
 
 ## Requirements
 
@@ -84,27 +86,27 @@ they will be created in `1.3.5: Graphics pipeline`.
 
 This one is huge so it will be split across several commits.
 
-#### 1.3.3.1: Vertex input and input assembly
+- 1.3.3.1: Vertex input and input assembly
 
 Create the vertex input and input assembly info for the pipeline.
 
-#### 1.3.3.2: Viewports and scissors
+- 1.3.3.2: Viewports and scissors
 
 Create the viewport and scissor info for the pipeline.
 
-#### 1.3.3.3: Rasterizer
+- 1.3.3.3: Rasterizer
 
 Create the rasterizer info for the pipeline.
 
-#### 1.3.3.4: Multisampling
+- 1.3.3.4: Multisampling
 
 Create the multisampling info for the pipeline.
 
-#### 1.3.3.5: Color blending
+- 1.3.3.5: Color blending
 
 Create color blend attachment and color blend info for the pipeline.
 
-#### 1.3.3.6: Pipeline layout
+- 1.3.3.6: Pipeline layout
 
 Create the pipeline layout info.
 
@@ -141,21 +143,21 @@ Then we register all the commands required to render.
 
 This section is also split across multiple commits.
 
-#### 1.4.3.1: Main loop
+- 1.4.3.1: Main loop
 
 Setup the main loop.
 
-#### 1.4.3.2: Semaphores
+- 1.4.3.2: Semaphores
 
 Create a semphore to signal that an image has been acquired and another one
 to signal that the rendering to the image is finished.
 
-#### 1.4.3.3: Rendering the triangle!
+- 1.4.3.3: Rendering the triangle!
 
 Acquire the next image from the swapchain, submit the command buffer and
 present the rendered image.
 
-#### 1.4.3.4: Frames in flight
+- 1.4.3.4: Frames in flight
 
 Limit the number of frames that can be renderer simultaneously using fences.
 
@@ -178,11 +180,11 @@ or out of date.
 Remove hard coded vertices from the vertex shader source and create vertices on the cpu.
 Update the pipeline with the vertex binding and attributes description.
 
-## 2.2: Vertex buffer creation
+### 2.2: Vertex buffer creation
 
 Create and fill the vertex buffer and bind it before rendering.
 
-## 2.3: Staging buffer
+### 2.3: Staging buffer
 
 Create a staging buffer for the vertex data and copy the vertex data from this buffer's
 memory to the memory of the device local buffer. 
@@ -190,7 +192,7 @@ memory to the memory of the device local buffer.
 The tutorial also suggests that we allocate command buffers used for memory copy from
 a command pool dedicated to short-lived command buffers, so we did that too.
 
-## 2.4: Index buffer
+### 2.4: Index buffer
 
 Use index buffer to reuse vertice when drawing a rectangle.
 
@@ -199,7 +201,7 @@ but with the vertex data replaced with the index data. To limit duplication we'v
 a method that creates and fill a buffer and fill it with the passed data. This method is
 called from `create_vertex_buffer` and `create_index_buffer`.
 
-## 3.1: Descriptor layout and buffer
+### 3.1: Descriptor layout and buffer
 
 Create a `UniformBufferObject` structure containing transformation matrices and create the
 descriptor layout and buffers used to make it accessible from the vertex shader.
@@ -207,45 +209,45 @@ descriptor layout and buffers used to make it accessible from the vertex shader.
 Also add a `math` module containing a `perspective` function that creates a prespective matrix
 that is working with Vulkan's NDC. 
 
-## 3.2: Descriptor pool and sets
+### 3.2: Descriptor pool and sets
 
 Create a descriptor pool and allocate a descriptor set for each descriptor buffer.
 
-## 4.1: Images
+### 4.1: Images
 
 This section is split too.
 
-### 4.1.1: Loading an image
+- 4.1.1: Loading an image
 
 Load an image from a file.
 
-### 4.1.2: Creating the image
+- 4.1.2: Creating the image
 
 Create an host visible staging buffer for image data and create a device local
 image. At this point the image is empty, we will copy the buffer data in a later
 section.
 
-### 4.1.3: Copying buffer data into the image
+- 4.1.3: Copying buffer data into the image
 
 Copy the image data store in the host visible buffer to the device local image.
 
-## 4.2: Image view and sampler
+### 4.2: Image view and sampler
 
 Create the image view and sampler. Also enable the sampler anisotropy feature.
 
-## 4.3: Combined image sampler
+### 4.3: Combined image sampler
 
 Update the descriptor set, add texture coordinates to `Vertex` and update the 
 shaders to read texture coordinates and sample the texture.
 
- ## 5: Depth buffering
+### 5: Depth buffering
 
  Update `Vertex` to make the position 3d. Update the vertex shader to take the
  new dimension into account. Add a new quad to render. And setup depth buffer
  so the new quad is renderer correctly relatively to the other. Recreate the
  depth buffer resources when the swapchain is recreated.
 
- ## 5.extra: Refactoring
+### 5.extra: Refactoring
 
  Add `Texture` struct which will hold the resources required by mutable image,
  (image, memory, view and optionnally a sampler).
@@ -255,12 +257,12 @@ shaders to read texture coordinates and sample the texture.
 
  Overall refactoring of the code with some Rust specific code smell fixes.
 
- ## 6: Loading models
+### 6: Loading models
 
  Load a 3D model from an wavefront obj file and render it. We skip the deduplication
  step because the crate we use to load obj files already does it.
 
- ## 6.extra: Orbital camera
+### 6.extra: Orbital camera
 
 Since `3.1: Descriptor layout and buffer`, our rendered geometry has been spinning
 infinitely around its local z axis. In this chapter we change this behaviour and
@@ -269,9 +271,13 @@ implement an orbital camera controlled with the mouse.
 You can scroll the mouse wheel to get closer or further away from the global origin.
 And you can left click and move the mouse to move around the global origin.
 
-## 7: Generating mpimaps
+### 7: Generating mpimaps
 
 Generate mipmaps for the model texture and update the sampler to make use of them.
+
+### 8: Multisampling
+
+Add multisampling anti-aliasing.
 
 ## Run it
 
@@ -281,13 +287,30 @@ With validation layers:
 RUST_LOG=vulkan_tutorial_ash=debug cargo run
 ```
 
+> The RUST_LOG level will affect the log level of the validation layers too.
+
 or without:
 
 ```sh
-RUST_LOG=vulkan_tutorial_ash=debug cargo run --release
+cargo run --release
 ```
+
+## Links
+
+[Vulkan tutotial][0]
+[Ash][1]
+[Rust docs][4]
+[Cargo docs][2]
+[Vulkan SDK][3]
+[Vulkan specs][5]
+[The image statue][6]
+[The 3D model][7]
 
 [0]: https://vulkan-tutorial.com/Introduction
 [1]: https://github.com/MaikKlein/ash
 [2]: https://doc.rust-lang.org/cargo
 [3]: https://www.lunarg.com/vulkan-sdk
+[4]: https://doc.rust-lang.org/
+[5]: https://www.khronos.org/registry/vulkan/specs/1.1/html/
+[6]: https://pixabay.com/en/statue-sculpture-figure-1275469/
+[7]: https://sketchfab.com/3d-models/chalet-hippolyte-chassande-baroz-e925320e1d5744d9ae661aeff61e7aef
