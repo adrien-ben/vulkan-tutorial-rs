@@ -29,27 +29,30 @@ compiled shaders for the program to run.
 
 ## Commits
 
-### 1.1.1: Base code
+This section contains the summary of the project commits. Follow :rabbit2: to go to the related 
+tutorial page.
+
+### 1.1.1: Base code [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Setup/Base_code)
 
 Application setup. We don't setup the window system now as it's done in 
 the original tutorial.
 
-### 1.1.2: Instance
+### 1.1.2: Instance [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Setup/Instance)
 
 Create and destroy the Vulkan instance with required surface extensions.
 
-### 1.1.3: Validation layers
+### 1.1.3: Validation layers [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Setup/Validation_layers)
 
 Add `VK_LAYER_LUNARG_standard_validation` at instance creation and creates
 a debug report callback function after checking that it is available. 
 Since we are using the `log` crate, we log the message with the proper log level.
 The callback is detroyed at application termination.
 
-### 1.1.4: Physical devices and queue families
+### 1.1.4: Physical devices and queue families [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Setup/Physical_devices_and_queue_families)
 
 Find a physical device with at least a queue family supporting graphics.
 
-### 1.1.5: Logical device and queues
+### 1.1.5: Logical device and queues [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Setup/Logical_device_and_queues)
 
 Create the logical device interfacing with the physical device. Then create
 the graphics queue from the device.
@@ -60,19 +63,19 @@ the graphics queue from the device.
 - Move validation layers related code to its own module.
 - Disabled validation layers on release build.
 
-### 1.2.1: Window surface
+### 1.2.1: Window surface [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Presentation/Window_surface)
 
 Create the window, the window surface and the presentation queue.
 Update the physical device creation to get a device with presentation support.
 At that point, the code will only work on Windows.
 
-### 1.2.2: Swapchain
+### 1.2.2: Swapchain [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Presentation/Swap_chain)
 
 Checks for swapchain support and enable device extension for swapchain. Then
 query the swapchain details and choose the right settings. Then create the 
 swapchain and retrieve the swapchain images.
 
-### 1.2.3: Image views
+### 1.2.3: Image views [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Presentation/Image_views)
 
 Create the image views to the swapchain images.
 
@@ -82,7 +85,7 @@ Add `SwapchainProperties` to hold the format, present mode and extent of our swa
 Add a method to build the best properties to `SwapchainSupportDetails`.
 Move these two struct into the `swapchain` module.
 
-### 1.3.2: Shader module
+### 1.3.2: Shader module [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Graphics_pipeline_basics/Shader_modules)
 
 Create the vertex and fragment shaders GLSL source and add a `compile.bat` script
 to compile it into SPIR-V bytecode using `glslangValidator`.
@@ -91,7 +94,7 @@ Load the compiled SPIR-V and create a `ShaderModule` from it.
 In this section I forgot to create the shader stage create info structures. It's ok
 they will be created in `1.3.5: Graphics pipeline`.
 
-### 1.3.3: Fixed functions
+### 1.3.3: Fixed functions [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Graphics_pipeline_basics/Fixed_functions)
 
 This one is huge so it will be split across several commits.
 
@@ -119,11 +122,11 @@ Create color blend attachment and color blend info for the pipeline.
 
 Create the pipeline layout info.
 
-### 1.3.4: Render passes
+### 1.3.4: Render passes [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Graphics_pipeline_basics/Render_passes)
 
 Create the render pass.
 
-### 1.3.5: Graphics pipeline
+### 1.3.5: Graphics pipeline [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Graphics_pipeline_basics/Conclusion)
 
 Create the `PipelineShaderStageCreateInfo` that we forgot in `1.3.2: Shader module`.
 
@@ -139,16 +142,16 @@ The build script scan the content of the `shaders` directory and generates a com
 SPIR-V shader for each file it founds. The files are generated in a the same directory
 as the GLSL shaders and with the same name appended with `.spv`.
 
-### 1.4.1: Framebuffers
+### 1.4.1: Framebuffers [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Framebuffers)
 
 Create one framebuffer for each image of the swapchain.
 
-### 1.4.2: Command buffers
+### 1.4.2: Command buffers [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Command_buffers)
 
 Create a command pool and allocate one command buffer per swapchain image.
 Then we register all the commands required to render.
 
-### 1.4.3: Rendering and presentation
+### 1.4.3: Rendering and presentation [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Rendering_and_presentation)
 
 This section is also split across multiple commits.
 
@@ -181,21 +184,21 @@ to avoid having to recreate it multiple times.
 - Implement `Iterator` for `InFlightFrames` so we just need to call `next()` to
 get next frame sync objects.
 
-### 1.5: Swapchain recreation
+### 1.5: Swapchain recreation [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Swap_chain_recreation)
 
 Handle swapchain recreation when resizing the window or when the swapchain is suboptimal
 or out of date.
 
-### 2.1: Vertex input description
+### 2.1: Vertex input description [:rabbit2:](https://vulkan-tutorial.com/Vertex_buffers/Vertex_input_description)
 
 Remove hard coded vertices from the vertex shader source and create vertices on the cpu.
 Update the pipeline with the vertex binding and attributes description.
 
-### 2.2: Vertex buffer creation
+### 2.2: Vertex buffer creation [:rabbit2:](https://vulkan-tutorial.com/Vertex_buffers/Vertex_buffer_creation)
 
 Create and fill the vertex buffer and bind it before rendering.
 
-### 2.3: Staging buffer
+### 2.3: Staging buffer [:rabbit2:](https://vulkan-tutorial.com/Vertex_buffers/Staging_buffer)
 
 Create a staging buffer for the vertex data and copy the vertex data from this buffer's
 memory to the memory of the device local buffer. 
@@ -203,7 +206,7 @@ memory to the memory of the device local buffer.
 The tutorial also suggests that we allocate command buffers used for memory copy from
 a command pool dedicated to short-lived command buffers, so we did that too.
 
-### 2.4: Index buffer
+### 2.4: Index buffer [:rabbit2:](https://vulkan-tutorial.com/Vertex_buffers/Index_buffer)
 
 Use index buffer to reuse vertice when drawing a rectangle.
 
@@ -214,7 +217,7 @@ called from `create_vertex_buffer` and `create_index_buffer`.
 
 ![Then a quad.](screenshots/quad.png)
 
-### 3.1: Descriptor layout and buffer
+### 3.1: Descriptor layout and buffer [:rabbit2:](https://vulkan-tutorial.com/Uniform_buffers/Descriptor_layout_and_buffer)
 
 Create a `UniformBufferObject` structure containing transformation matrices and create the
 descriptor layout and buffers used to make it accessible from the vertex shader.
@@ -222,13 +225,13 @@ descriptor layout and buffers used to make it accessible from the vertex shader.
 Also add a `math` module containing a `perspective` function that creates a prespective matrix
 that is working with Vulkan's NDC. 
 
-### 3.2: Descriptor pool and sets
+### 3.2: Descriptor pool and sets [:rabbit2:](https://vulkan-tutorial.com/Uniform_buffers/Descriptor_pool_and_sets)
 
 Create a descriptor pool and allocate a descriptor set for each descriptor buffer.
 
 ![With MVP matrices.](screenshots/ubo.png)
 
-### 4.1: Images
+### 4.1: Images [:rabbit2:](https://vulkan-tutorial.com/Texture_mapping/Images)
 
 This section is split too.
 
@@ -246,18 +249,18 @@ section.
 
 Copy the image data store in the host visible buffer to the device local image.
 
-### 4.2: Image view and sampler
+### 4.2: Image view and sampler [:rabbit2:](https://vulkan-tutorial.com/Texture_mapping/Image_view_and_sampler)
 
 Create the image view and sampler. Also enable the sampler anisotropy feature.
 
-### 4.3: Combined image sampler
+### 4.3: Combined image sampler [:rabbit2:](https://vulkan-tutorial.com/Texture_mapping/Combined_image_sampler)
 
 Update the descriptor set, add texture coordinates to `Vertex` and update the 
 shaders to read texture coordinates and sample the texture.
 
 ![Textured.](screenshots/texture.png)
 
-### 5: Depth buffering
+### 5: Depth buffering [:rabbit2:](https://vulkan-tutorial.com/Depth_buffering)
 
  Update `Vertex` to make the position 3d. Update the vertex shader to take the
  new dimension into account. Add a new quad to render. And setup depth buffer
@@ -276,7 +279,7 @@ shaders to read texture coordinates and sample the texture.
 
  Overall refactoring of the code with some Rust specific code smell fixes.
 
-### 6: Loading models
+### 6: Loading models [:rabbit2:](https://vulkan-tutorial.com/Loading_models)
 
  Load a 3D model from an wavefront obj file and render it. We skip the deduplication
  step because the crate we use to load obj files already does it.
@@ -290,11 +293,11 @@ implement an orbital camera controlled with the mouse.
 You can scroll the mouse wheel to get closer or further away from the global origin.
 And you can left click and move the mouse to move around the global origin.
 
-### 7: Generating mpimaps
+### 7: Generating mpimaps [:rabbit2:](https://vulkan-tutorial.com/Generating_Mipmaps)
 
 Generate mipmaps for the model texture and update the sampler to make use of them.
 
-### 8: Multisampling
+### 8: Multisampling [:rabbit2:](https://vulkan-tutorial.com/Multisampling)
 
 Add multisampling anti-aliasing.
 
