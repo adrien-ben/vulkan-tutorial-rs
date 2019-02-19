@@ -2,6 +2,8 @@
 
 Vulkan [tutorials][0] written in Rust using [Ash][1].
 
+[![Build Status][9]][8]
+
 ![The end result](screenshots/end.png)
 
 ## Introduction
@@ -12,13 +14,18 @@ long chapters.
 
 Sometimes an 'extra' commit will be added with some refactoring, commenting or feature.
 
-All chapters of the original tutorial are now covered.
+All chapters of the original tutorial are now covered. The code compiles on windows, linux
+and macos and runs on windows and linux. It should also run on macos but I haven't been
+able to test yet. I'll update this statement when I (or someone else) can try.
 
 ## Requirements
 
-The project will only run on windows for now. You need to have a [Vulkan SDK][3] installed.
-For the project to compile you need to have the `VULKAN_SDK` environment variable set. This
-is used when building the project to compile the shaders.
+You need to have a [Vulkan SDK][3] installed and  `glslangValidator` executable in your `PATH`. 
+This should be the case when installing the Vulkan SDK.
+
+If for some reason you want to skip the shader compilation when buiding the project you can set
+the `SKIP_SHADER_COMPILATION` environment variable to `true`. Though you will need to provide the
+compiled shaders for the program to run.
 
 ## Commits
 
@@ -339,3 +346,5 @@ Thanks to Alexander Overvoorde for this amazing tutorials.
 [5]: https://www.khronos.org/registry/vulkan/specs/1.1/html/
 [6]: https://pixabay.com/en/statue-sculpture-figure-1275469/
 [7]: https://sketchfab.com/3d-models/chalet-hippolyte-chassande-baroz-e925320e1d5744d9ae661aeff61e7aef
+[8]: https://travis-ci.org/adrien-ben/vulkan-tutorial-rs
+[9]: https://travis-ci.org/adrien-ben/vulkan-tutorial-rs.svg?branch=master
