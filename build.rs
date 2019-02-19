@@ -1,4 +1,5 @@
 use std::{
+    env::var,
     ffi::OsStr,
     fs,
     io::Result,
@@ -7,14 +8,21 @@ use std::{
 };
 
 fn main() {
-    compile_shaders();
+    if !should_skip_shader_compilation() {
+        compile_shaders();
+    }
+}
+
+fn should_skip_shader_compilation() -> bool {
+    var("SKIP_SHADER_COMPILATION")
+        .map(|var| var.parse::<bool>().unwrap_or(false))
+        .unwrap_or(false)
 }
 
 fn compile_shaders() {
     println!("Compiling shaders");
 
     let shader_dir_path = get_shader_source_dir_path();
-    let glslang_validator_exe_path = get_glslang_exe_path();
 
     fs::read_dir(shader_dir_path.clone())
         .unwrap()
@@ -27,12 +35,12 @@ fn compile_shaders() {
             let output_name = format!("{}.spv", &name);
             println!("Found file {:?}.\nCompiling...", path.as_os_str());
 
-            let result = dbg!(Command::new(glslang_validator_exe_path.as_os_str())
+            let result = Command::new("glslangValidator")
                 .current_dir(&shader_dir_path)
                 .arg("-V")
                 .arg(&path)
                 .arg("-o")
-                .arg(output_name))
+                .arg(output_name)
             .output();
 
             handle_program_result(result);
@@ -47,15 +55,6 @@ fn get_shader_source_dir_path() -> PathBuf {
 
 fn get_root_path() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-}
-
-fn get_glslang_exe_path() -> PathBuf {
-    let vulkan_sdk_dir = env!("VULKAN_SDK");
-    let path = Path::new(vulkan_sdk_dir)
-        .join("Bin32")
-        .join("glslangValidator.exe");
-    println!("Glslang executable path: {:?}", path.as_os_str());
-    path
 }
 
 fn handle_program_result(result: Result<Output>) {
