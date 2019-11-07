@@ -23,15 +23,15 @@ unsafe extern "system" fn vulkan_debug_callback(
     _: *mut c_void,
 ) -> u32 {
     if flag == vk::DebugReportFlagsEXT::DEBUG {
-        log::debug!("{} - {:?}", typ, CStr::from_ptr(p_message));
+        log::debug!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     } else if flag == vk::DebugReportFlagsEXT::INFORMATION {
-        log::info!("{} - {:?}", typ, CStr::from_ptr(p_message));
+        log::info!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     } else if flag == vk::DebugReportFlagsEXT::WARNING {
-        log::warn!("{} - {:?}", typ, CStr::from_ptr(p_message));
+        log::warn!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     } else if flag == vk::DebugReportFlagsEXT::PERFORMANCE_WARNING {
-        log::warn!("{} - {:?}", typ, CStr::from_ptr(p_message));
+        log::warn!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     } else {
-        log::error!("{} - {:?}", typ, CStr::from_ptr(p_message));
+        log::error!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     }
     vk::FALSE
 }

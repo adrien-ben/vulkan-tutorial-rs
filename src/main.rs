@@ -510,7 +510,7 @@ impl VulkanApp {
         };
 
         log::debug!(
-            "Creating swapchain.\n\tFormat: {}\n\tColorSpace: {}\n\tPresentMode: {}\n\tExtent: {:?}\n\tImageCount: {}",
+            "Creating swapchain.\n\tFormat: {:?}\n\tColorSpace: {:?}\n\tPresentMode: {:?}\n\tExtent: {:?}\n\tImageCount: {:?}",
             format.format,
             format.color_space,
             present_mode,
@@ -1293,7 +1293,7 @@ impl VulkanApp {
                         vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                     ),
                     _ => panic!(
-                        "Unsupported layout transition({} => {}).",
+                        "Unsupported layout transition({:?} => {:?}).",
                         old_layout, new_layout
                     ),
                 };
@@ -1397,7 +1397,7 @@ impl VulkanApp {
             .optimal_tiling_features
             .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR)
         {
-            panic!("Linear blitting is not supported for format {}.", format)
+            panic!("Linear blitting is not supported for format {:?}.", format)
         }
 
         Self::execute_one_time_commands(
