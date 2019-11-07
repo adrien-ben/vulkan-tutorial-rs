@@ -23,13 +23,20 @@ git = "https://github.com/rust-windowing/android-rs-glue"
 
 # Android metadata
 [package.metadata.android]
-label = "Vulkan Triangle Ash"
+label = "Vulkan Tutorial Ash"
 assets = "assets"
 
 [package.metadata.android.application_attributes]
 "android:hardwareAccelerated" = "true"
 
+[package.metadata.android.activity_attributes]
+"android:screenOrientation" = "portrait"
+
 [[package.metadata.android.feature]]
 name = "android.hardware.vulkan.version"
 version = "0x400000"
+required = true
+
+[[package.metadata.android.feature]]
+name = "android.hardware.screen.portrait"
 required = true

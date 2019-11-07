@@ -22,8 +22,8 @@ use std::{
     mem::{align_of, size_of},
 };
 use winit::{
-    dpi::LogicalSize, ElementState, Event, EventsLoop, MouseButton, MouseScrollDelta, Window,
-    WindowBuilder, WindowEvent,
+    dpi::LogicalSize, ElementState, Event, EventsLoop, MouseButton, MouseScrollDelta, Touch,
+    TouchPhase, Window, WindowBuilder, WindowEvent,
 };
 
 const WIDTH: u32 = 800;
@@ -1985,6 +1985,7 @@ impl VulkanApp {
         let mut resize_dimensions = None;
         let mut is_left_clicked = None;
         let mut cursor_position = None;
+        let mut last_position = self.cursor_position;
         let mut wheel_delta = None;
 
         self.events_loop.poll_events(|event| match event {
@@ -2008,6 +2009,19 @@ impl VulkanApp {
                     let position: (i32, i32) = position.into();
                     cursor_position = Some([position.0, position.1]);
                 }
+                WindowEvent::Touch(Touch {
+                    location, phase, ..
+                }) => {
+                    let position: (i32, i32) = location.into();
+                    cursor_position = Some([-position.0, -position.1]);
+
+                    if phase == TouchPhase::Started {
+                        last_position = cursor_position.unwrap();
+                        is_left_clicked = Some(true);
+                    } else if phase == TouchPhase::Ended {
+                        is_left_clicked = Some(false);
+                    }
+                }
                 WindowEvent::MouseWheel {
                     delta: MouseScrollDelta::LineDelta(_, v_lines),
                     ..
@@ -2024,7 +2038,6 @@ impl VulkanApp {
             self.is_left_clicked = is_left_clicked;
         }
         if let Some(position) = cursor_position {
-            let last_position = self.cursor_position;
             self.cursor_position = position;
             self.cursor_delta = Some([
                 position[0] - last_position[0],
