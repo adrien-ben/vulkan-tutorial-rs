@@ -1,6 +1,7 @@
 mod camera;
 mod context;
 mod debug;
+mod fs;
 mod math;
 mod surface;
 mod swapchain;
@@ -19,7 +20,6 @@ use cgmath::{Deg, Matrix4, Point3, Vector3};
 use std::{
     ffi::{CStr, CString},
     mem::{align_of, size_of},
-    path::Path,
 };
 use winit::{
     dpi::LogicalSize, ElementState, Event, EventsLoop, MouseButton, MouseScrollDelta, Window,
@@ -938,8 +938,8 @@ impl VulkanApp {
 
     fn read_shader_from_file<P: AsRef<std::path::Path>>(path: P) -> Vec<u32> {
         log::debug!("Loading shader file {}", path.as_ref().to_str().unwrap());
-        let mut file = std::fs::File::open(path).unwrap();
-        ash::util::read_spv(&mut file).unwrap()
+        let mut cursor = fs::load(path);
+        ash::util::read_spv(&mut cursor).unwrap()
     }
 
     fn create_shader_module(device: &Device, code: &[u32]) -> vk::ShaderModule {
@@ -1093,7 +1093,10 @@ impl VulkanApp {
         command_pool: vk::CommandPool,
         copy_queue: vk::Queue,
     ) -> Texture {
-        let image = image::open("images/chalet.jpg").unwrap().flipv();
+        let cursor = fs::load("images/chalet.jpg");
+        let image = image::load(cursor, image::ImageFormat::JPEG)
+            .unwrap()
+            .flipv();
         let image_as_rgb = image.to_rgba();
         let width = (&image_as_rgb).width();
         let height = (&image_as_rgb).height();
@@ -1541,7 +1544,11 @@ impl VulkanApp {
 
     fn load_model() -> (Vec<Vertex>, Vec<u32>) {
         log::debug!("Loading model.");
-        let (models, _) = tobj::load_obj(&Path::new("models/chalet.obj")).unwrap();
+        let mut cursor = fs::load("models/chalet.obj");
+        let (models, _) = tobj::load_obj_buf(&mut cursor, |_| {
+            Ok((vec![], std::collections::HashMap::new()))
+        })
+        .unwrap();
 
         let mesh = &models[0].mesh;
         let positions = mesh.positions.as_slice();
