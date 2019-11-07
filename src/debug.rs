@@ -38,7 +38,7 @@ unsafe extern "system" fn vulkan_debug_callback(
 
 /// Get the pointers to the validation layers names.
 /// Also return the corresponding `CString` to avoid dangling pointers.
-pub fn get_layer_names_and_pointers() -> (Vec<CString>, Vec<*const i8>) {
+pub fn get_layer_names_and_pointers() -> (Vec<CString>, Vec<*const c_char>) {
     let layer_names = REQUIRED_LAYERS
         .iter()
         .map(|name| CString::new(*name).unwrap())

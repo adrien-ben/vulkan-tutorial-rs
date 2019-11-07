@@ -41,7 +41,7 @@ fn compile_shaders() {
                 .arg(&path)
                 .arg("-o")
                 .arg(output_name)
-            .output();
+                .output();
 
             handle_program_result(result);
         })
