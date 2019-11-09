@@ -1,10 +1,10 @@
 # Vulkan tutorial
 
+![][8]
+
 Vulkan [tutorials][0] written in Rust using [Ash][1]. The [extended][10] branch contains a few more
 chapters that I won't merge on that branch since I want it to stay close to the original tutorial.
 Please check it out :).
-
-[![Build Status][9]][8]
 
 ![The end result](screenshots/end.png)
 
@@ -364,8 +364,7 @@ Thanks to Alexander Overvoorde for this amazing tutorials.
 [5]: https://www.khronos.org/registry/vulkan/specs/1.1/html/
 [6]: https://pixabay.com/en/statue-sculpture-figure-1275469/
 [7]: https://sketchfab.com/3d-models/chalet-hippolyte-chassande-baroz-e925320e1d5744d9ae661aeff61e7aef
-[8]: https://travis-ci.org/adrien-ben/vulkan-tutorial-rs
-[9]: https://travis-ci.org/adrien-ben/vulkan-tutorial-rs.svg?branch=master
+[8]: https://github.com/adrien-ben/vulkan-tutorial-rs/workflows/Cross-platform%20build/badge.svg
 [10]: https://github.com/adrien-ben/vulkan-tutorial-rs/tree/extended
 [11]: https://hub.docker.com/r/philipalldredge/cargo-apk
 [12]: https://github.com/rust-windowing/android-rs-glue
