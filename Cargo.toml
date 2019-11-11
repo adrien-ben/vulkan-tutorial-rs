@@ -6,18 +6,37 @@ edition = "2018"
 build = "build.rs"
 
 [dependencies]
-log = "0.4"
-env_logger = "0.6"
-ash = "0.27"
-winit = "0.18"
+log = "0.4.8"
+env_logger = "0.7.1"
+ash = "0.29.0"
+raw-window-handle = "0.3.1"
 cgmath = "0.17.0"
-image = "0.21.0"
-tobj = "0.1.6"
+image = "0.22.3"
+tobj = "0.1.11"
 
-[target.'cfg(windows)'.dependencies]
-winapi = "0.3.6"
+[dependencies.winit]
+git = "https://github.com/adrien-ben/winit"
+rev = "c3e524f7deaa5dbc9a5a59ef0dd37980134cea53"
 
-[target.'cfg(target_os = "macos")'.dependencies]
-metal-rs = "0.6"
-cocoa = "0.13"
-objc = "0.2.2"
+[target.'cfg(target_os = "android")'.dependencies.android_glue]
+git = "https://github.com/rust-windowing/android-rs-glue"
+
+# Android metadata
+[package.metadata.android]
+label = "Vulkan Tutorial Ash"
+assets = "assets"
+
+[package.metadata.android.application_attributes]
+"android:hardwareAccelerated" = "true"
+
+[package.metadata.android.activity_attributes]
+"android:screenOrientation" = "portrait"
+
+[[package.metadata.android.feature]]
+name = "android.hardware.vulkan.version"
+version = "0x400000"
+required = true
+
+[[package.metadata.android.feature]]
+name = "android.hardware.screen.portrait"
+required = true

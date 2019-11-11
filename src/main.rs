@@ -1,6 +1,7 @@
 mod camera;
 mod context;
 mod debug;
+mod fs;
 mod math;
 mod surface;
 mod swapchain;
@@ -19,11 +20,10 @@ use cgmath::{Deg, Matrix4, Point3, Vector3};
 use std::{
     ffi::{CStr, CString},
     mem::{align_of, size_of},
-    path::Path,
 };
 use winit::{
-    dpi::LogicalSize, ElementState, Event, EventsLoop, MouseButton, MouseScrollDelta, Window,
-    WindowBuilder, WindowEvent,
+    dpi::LogicalSize, ElementState, Event, EventsLoop, MouseButton, MouseScrollDelta, Touch,
+    TouchPhase, Window, WindowBuilder, WindowEvent,
 };
 
 const WIDTH: u32 = 800;
@@ -510,7 +510,7 @@ impl VulkanApp {
         };
 
         log::debug!(
-            "Creating swapchain.\n\tFormat: {}\n\tColorSpace: {}\n\tPresentMode: {}\n\tExtent: {:?}\n\tImageCount: {}",
+            "Creating swapchain.\n\tFormat: {:?}\n\tColorSpace: {:?}\n\tPresentMode: {:?}\n\tExtent: {:?}\n\tImageCount: {:?}",
             format.format,
             format.color_space,
             present_mode,
@@ -938,8 +938,8 @@ impl VulkanApp {
 
     fn read_shader_from_file<P: AsRef<std::path::Path>>(path: P) -> Vec<u32> {
         log::debug!("Loading shader file {}", path.as_ref().to_str().unwrap());
-        let mut file = std::fs::File::open(path).unwrap();
-        ash::util::read_spv(&mut file).unwrap()
+        let mut cursor = fs::load(path);
+        ash::util::read_spv(&mut cursor).unwrap()
     }
 
     fn create_shader_module(device: &Device, code: &[u32]) -> vk::ShaderModule {
@@ -1093,7 +1093,10 @@ impl VulkanApp {
         command_pool: vk::CommandPool,
         copy_queue: vk::Queue,
     ) -> Texture {
-        let image = image::open("images/chalet.jpg").unwrap().flipv();
+        let cursor = fs::load("images/chalet.jpg");
+        let image = image::load(cursor, image::ImageFormat::JPEG)
+            .unwrap()
+            .flipv();
         let image_as_rgb = image.to_rgba();
         let width = (&image_as_rgb).width();
         let height = (&image_as_rgb).height();
@@ -1293,7 +1296,7 @@ impl VulkanApp {
                         vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                     ),
                     _ => panic!(
-                        "Unsupported layout transition({} => {}).",
+                        "Unsupported layout transition({:?} => {:?}).",
                         old_layout, new_layout
                     ),
                 };
@@ -1397,7 +1400,7 @@ impl VulkanApp {
             .optimal_tiling_features
             .contains(vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR)
         {
-            panic!("Linear blitting is not supported for format {}.", format)
+            panic!("Linear blitting is not supported for format {:?}.", format)
         }
 
         Self::execute_one_time_commands(
@@ -1541,7 +1544,11 @@ impl VulkanApp {
 
     fn load_model() -> (Vec<Vertex>, Vec<u32>) {
         log::debug!("Loading model.");
-        let (models, _) = tobj::load_obj(&Path::new("models/chalet.obj")).unwrap();
+        let mut cursor = fs::load("models/chalet.obj");
+        let (models, _) = tobj::load_obj_buf(&mut cursor, |_| {
+            Ok((vec![], std::collections::HashMap::new()))
+        })
+        .unwrap();
 
         let mesh = &models[0].mesh;
         let positions = mesh.positions.as_slice();
@@ -1978,6 +1985,7 @@ impl VulkanApp {
         let mut resize_dimensions = None;
         let mut is_left_clicked = None;
         let mut cursor_position = None;
+        let mut last_position = self.cursor_position;
         let mut wheel_delta = None;
 
         self.events_loop.poll_events(|event| match event {
@@ -2001,6 +2009,19 @@ impl VulkanApp {
                     let position: (i32, i32) = position.into();
                     cursor_position = Some([position.0, position.1]);
                 }
+                WindowEvent::Touch(Touch {
+                    location, phase, ..
+                }) => {
+                    let position: (i32, i32) = location.into();
+                    cursor_position = Some([-position.0, -position.1]);
+
+                    if phase == TouchPhase::Started {
+                        last_position = cursor_position.unwrap();
+                        is_left_clicked = Some(true);
+                    } else if phase == TouchPhase::Ended {
+                        is_left_clicked = Some(false);
+                    }
+                }
                 WindowEvent::MouseWheel {
                     delta: MouseScrollDelta::LineDelta(_, v_lines),
                     ..
@@ -2017,7 +2038,6 @@ impl VulkanApp {
             self.is_left_clicked = is_left_clicked;
         }
         if let Some(position) = cursor_position {
-            let last_position = self.cursor_position;
             self.cursor_position = position;
             self.cursor_delta = Some([
                 position[0] - last_position[0],

@@ -41,14 +41,14 @@ fn compile_shaders() {
                 .arg(&path)
                 .arg("-o")
                 .arg(output_name)
-            .output();
+                .output();
 
             handle_program_result(result);
         })
 }
 
 fn get_shader_source_dir_path() -> PathBuf {
-    let path = get_root_path().join("shaders");
+    let path = get_root_path().join("assets").join("shaders");
     println!("Shader source directory: {:?}", path.as_os_str());
     path
 }

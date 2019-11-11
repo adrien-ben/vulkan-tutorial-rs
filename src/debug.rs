@@ -23,22 +23,22 @@ unsafe extern "system" fn vulkan_debug_callback(
     _: *mut c_void,
 ) -> u32 {
     if flag == vk::DebugReportFlagsEXT::DEBUG {
-        log::debug!("{} - {:?}", typ, CStr::from_ptr(p_message));
+        log::debug!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     } else if flag == vk::DebugReportFlagsEXT::INFORMATION {
-        log::info!("{} - {:?}", typ, CStr::from_ptr(p_message));
+        log::info!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     } else if flag == vk::DebugReportFlagsEXT::WARNING {
-        log::warn!("{} - {:?}", typ, CStr::from_ptr(p_message));
+        log::warn!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     } else if flag == vk::DebugReportFlagsEXT::PERFORMANCE_WARNING {
-        log::warn!("{} - {:?}", typ, CStr::from_ptr(p_message));
+        log::warn!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     } else {
-        log::error!("{} - {:?}", typ, CStr::from_ptr(p_message));
+        log::error!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     }
     vk::FALSE
 }
 
 /// Get the pointers to the validation layers names.
 /// Also return the corresponding `CString` to avoid dangling pointers.
-pub fn get_layer_names_and_pointers() -> (Vec<CString>, Vec<*const i8>) {
+pub fn get_layer_names_and_pointers() -> (Vec<CString>, Vec<*const c_char>) {
     let layer_names = REQUIRED_LAYERS
         .iter()
         .map(|name| CString::new(*name).unwrap())
