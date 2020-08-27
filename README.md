@@ -17,7 +17,7 @@ long chapters.
 Sometimes an 'extra' commit will be added with some refactoring, commenting or feature.
 
 All chapters of the original tutorial are now covered. The code compiles on windows, linux
-and macos and runs on windows, linux and android. It should also run on macos but I haven't been
+and macos and runs on windows, and linux. It should also run on macos but I haven't been
 able to test yet. I'll update this statement when I (or someone else) can try.
 
 ## Requirements
@@ -321,19 +321,6 @@ or without:
 cargo run --release
 ```
 
-### Building the Android apk
-
-You can easily build the apk using [philipalldredge/cargo-apk][11]'s Docker image.
-
-```sh
-# Run the following command and the apk will be generated in 'target/android-artifacts/debug/apk'
-sudo docker run --env SKIP_SHADER_COMPILATION=true --rm -v $(pwd):/root/src philipalldredge/cargo-apk cargo apk build --release
-```
-
-> Make sure to build the release or the application might crash because of validation layers.
-
-For more details or alternatives about the build see the [android_glue][12] project.
-
 ## Links
 
 [Vulkan tutotial][0]
@@ -366,5 +353,3 @@ Thanks to Alexander Overvoorde for this amazing tutorials.
 [7]: https://sketchfab.com/3d-models/chalet-hippolyte-chassande-baroz-e925320e1d5744d9ae661aeff61e7aef
 [8]: https://github.com/adrien-ben/vulkan-tutorial-rs/workflows/Cross-platform%20build/badge.svg
 [10]: https://github.com/adrien-ben/vulkan-tutorial-rs/tree/extended
-[11]: https://hub.docker.com/r/philipalldredge/cargo-apk
-[12]: https://github.com/rust-windowing/android-rs-glue

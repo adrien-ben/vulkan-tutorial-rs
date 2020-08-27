@@ -3,7 +3,6 @@ mod context;
 mod debug;
 mod fs;
 mod math;
-mod surface;
 mod swapchain;
 mod texture;
 
@@ -22,17 +21,111 @@ use std::{
     mem::{align_of, size_of},
 };
 use winit::{
-    dpi::LogicalSize, ElementState, Event, EventsLoop, MouseButton, MouseScrollDelta, Touch,
-    TouchPhase, Window, WindowBuilder, WindowEvent,
+    dpi::PhysicalSize,
+    event::{ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::{Window, WindowBuilder},
 };
 
 const WIDTH: u32 = 800;
 const HEIGHT: u32 = 600;
 const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 
+fn main() {
+    env_logger::init();
+
+    let event_loop = EventLoop::new();
+    let window = WindowBuilder::new()
+        .with_title("Vulkan tutorial with Ash")
+        .with_inner_size(PhysicalSize::new(WIDTH, HEIGHT))
+        .build(&event_loop)
+        .unwrap();
+
+    let mut app = VulkanApp::new(&window);
+    let mut dirty_swapchain = false;
+
+    // Used to accumutate input events from the start to the end of a frame
+    let mut is_left_clicked = None;
+    let mut cursor_position = None;
+    let mut last_position = app.cursor_position;
+    let mut wheel_delta = None;
+
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Poll;
+
+        match event {
+            Event::NewEvents(_) => {
+                // reset input states on new frame
+                {
+                    is_left_clicked = None;
+                    cursor_position = None;
+                    last_position = app.cursor_position;
+                    wheel_delta = None;
+                }
+            }
+            Event::MainEventsCleared => {
+                // update input state after accumulating event
+                {
+                    if let Some(is_left_clicked) = is_left_clicked {
+                        app.is_left_clicked = is_left_clicked;
+                    }
+                    if let Some(position) = cursor_position {
+                        app.cursor_position = position;
+                        app.cursor_delta = Some([
+                            position[0] - last_position[0],
+                            position[1] - last_position[1],
+                        ]);
+                    } else {
+                        app.cursor_delta = None;
+                    }
+                    app.wheel_delta = wheel_delta;
+                }
+
+                // render
+                {
+                    if dirty_swapchain {
+                        let size = window.inner_size();
+                        if size.width > 0 && size.height > 0 {
+                            app.recreate_swapchain();
+                        }
+                    }
+                    dirty_swapchain = app.draw_frame();
+                }
+            }
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
+                WindowEvent::Resized { .. } => dirty_swapchain = true,
+                // Accumulate input events
+                WindowEvent::MouseInput {
+                    button: MouseButton::Left,
+                    state,
+                    ..
+                } => {
+                    if state == ElementState::Pressed {
+                        is_left_clicked = Some(true);
+                    } else {
+                        is_left_clicked = Some(false);
+                    }
+                }
+                WindowEvent::CursorMoved { position, .. } => {
+                    let position: (i32, i32) = position.into();
+                    cursor_position = Some([position.0, position.1]);
+                }
+                WindowEvent::MouseWheel {
+                    delta: MouseScrollDelta::LineDelta(_, v_lines),
+                    ..
+                } => {
+                    wheel_delta = Some(v_lines);
+                }
+                _ => (),
+            },
+            Event::LoopDestroyed => app.wait_gpu_idle(),
+            _ => (),
+        }
+    });
+}
+
 struct VulkanApp {
-    events_loop: EventsLoop,
-    _window: Window,
     resize_dimensions: Option<[u32; 2]>,
 
     camera: Camera,
@@ -76,21 +169,15 @@ struct VulkanApp {
 }
 
 impl VulkanApp {
-    fn new() -> Self {
+    fn new(window: &Window) -> Self {
         log::debug!("Creating application.");
 
-        let events_loop = EventsLoop::new();
-        let window = WindowBuilder::new()
-            .with_title("Vulkan tutorial with Ash")
-            .with_dimensions(LogicalSize::new(f64::from(WIDTH), f64::from(HEIGHT)))
-            .build(&events_loop)
-            .unwrap();
-
         let entry = Entry::new().expect("Failed to create entry.");
-        let instance = Self::create_instance(&entry);
+        let instance = Self::create_instance(&entry, window);
 
         let surface = Surface::new(&entry, &instance);
-        let surface_khr = unsafe { surface::create_surface(&entry, &instance, &window).unwrap() };
+        let surface_khr =
+            unsafe { ash_window::create_surface(&entry, &instance, window, None).unwrap() };
 
         let debug_report_callback = setup_debug_messenger(&entry, &instance);
 
@@ -214,8 +301,6 @@ impl VulkanApp {
         let in_flight_frames = Self::create_sync_objects(vk_context.device());
 
         Self {
-            events_loop,
-            _window: window,
             resize_dimensions: None,
             camera: Default::default(),
             is_left_clicked: false,
@@ -257,18 +342,22 @@ impl VulkanApp {
         }
     }
 
-    fn create_instance(entry: &Entry) -> Instance {
+    fn create_instance(entry: &Entry, window: &Window) -> Instance {
         let app_name = CString::new("Vulkan Application").unwrap();
         let engine_name = CString::new("No Engine").unwrap();
         let app_info = vk::ApplicationInfo::builder()
             .application_name(app_name.as_c_str())
-            .application_version(ash::vk_make_version!(0, 1, 0))
+            .application_version(vk::make_version(0, 1, 0))
             .engine_name(engine_name.as_c_str())
-            .engine_version(ash::vk_make_version!(0, 1, 0))
-            .api_version(ash::vk_make_version!(1, 0, 0))
+            .engine_version(vk::make_version(0, 1, 0))
+            .api_version(vk::make_version(1, 0, 0))
             .build();
 
-        let mut extension_names = surface::required_extension_names();
+        let extension_names = ash_window::enumerate_required_extensions(window).unwrap();
+        let mut extension_names = extension_names
+            .iter()
+            .map(|ext| ext.as_ptr())
+            .collect::<Vec<_>>();
         if ENABLE_VALIDATION_LAYERS {
             extension_names.push(DebugReport::name().as_ptr());
         }
@@ -391,8 +480,11 @@ impl VulkanApp {
                 graphics = Some(index);
             }
 
-            let present_support =
-                unsafe { surface.get_physical_device_surface_support(device, index, surface_khr) };
+            let present_support = unsafe {
+                surface
+                    .get_physical_device_surface_support(device, index, surface_khr)
+                    .unwrap()
+            };
             if present_support && present.is_none() {
                 present = Some(index);
             }
@@ -1094,7 +1186,7 @@ impl VulkanApp {
         copy_queue: vk::Queue,
     ) -> Texture {
         let cursor = fs::load("images/chalet.jpg");
-        let image = image::load(cursor, image::ImageFormat::JPEG)
+        let image = image::load(cursor, image::ImageFormat::Jpeg)
             .unwrap()
             .flipv();
         let image_as_rgb = image.to_rgba();
@@ -1545,7 +1637,7 @@ impl VulkanApp {
     fn load_model() -> (Vec<Vertex>, Vec<u32>) {
         log::debug!("Loading model.");
         let mut cursor = fs::load("models/chalet.obj");
-        let (models, _) = tobj::load_obj_buf(&mut cursor, |_| {
+        let (models, _) = tobj::load_obj_buf(&mut cursor, true, |_| {
             Ok((vec![], std::collections::HashMap::new()))
         })
         .unwrap();
@@ -1967,90 +2059,11 @@ impl VulkanApp {
         InFlightFrames::new(sync_objects_vec)
     }
 
-    fn run(&mut self) {
-        log::debug!("Running application.");
-        loop {
-            if self.process_event() {
-                break;
-            }
-            self.draw_frame()
-        }
+    pub fn wait_gpu_idle(&self) {
         unsafe { self.vk_context.device().device_wait_idle().unwrap() };
     }
 
-    /// Process the events from the `EventsLoop` and return whether the
-    /// main loop should stop.
-    fn process_event(&mut self) -> bool {
-        let mut should_stop = false;
-        let mut resize_dimensions = None;
-        let mut is_left_clicked = None;
-        let mut cursor_position = None;
-        let mut last_position = self.cursor_position;
-        let mut wheel_delta = None;
-
-        self.events_loop.poll_events(|event| match event {
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested => should_stop = true,
-                WindowEvent::Resized(LogicalSize { width, height }) => {
-                    resize_dimensions = Some([width as u32, height as u32]);
-                }
-                WindowEvent::MouseInput {
-                    button: MouseButton::Left,
-                    state,
-                    ..
-                } => {
-                    if state == ElementState::Pressed {
-                        is_left_clicked = Some(true);
-                    } else {
-                        is_left_clicked = Some(false);
-                    }
-                }
-                WindowEvent::CursorMoved { position, .. } => {
-                    let position: (i32, i32) = position.into();
-                    cursor_position = Some([position.0, position.1]);
-                }
-                WindowEvent::Touch(Touch {
-                    location, phase, ..
-                }) => {
-                    let position: (i32, i32) = location.into();
-                    cursor_position = Some([-position.0, -position.1]);
-
-                    if phase == TouchPhase::Started {
-                        last_position = cursor_position.unwrap();
-                        is_left_clicked = Some(true);
-                    } else if phase == TouchPhase::Ended {
-                        is_left_clicked = Some(false);
-                    }
-                }
-                WindowEvent::MouseWheel {
-                    delta: MouseScrollDelta::LineDelta(_, v_lines),
-                    ..
-                } => {
-                    wheel_delta = Some(v_lines);
-                }
-                _ => {}
-            },
-            _ => {}
-        });
-
-        self.resize_dimensions = resize_dimensions;
-        if let Some(is_left_clicked) = is_left_clicked {
-            self.is_left_clicked = is_left_clicked;
-        }
-        if let Some(position) = cursor_position {
-            self.cursor_position = position;
-            self.cursor_delta = Some([
-                position[0] - last_position[0],
-                position[1] - last_position[1],
-            ]);
-        } else {
-            self.cursor_delta = None;
-        }
-        self.wheel_delta = wheel_delta;
-        should_stop
-    }
-
-    fn draw_frame(&mut self) {
+    pub fn draw_frame(&mut self) -> bool {
         log::trace!("Drawing frame.");
         let sync_objects = self.in_flight_frames.next().unwrap();
         let image_available_semaphore = sync_objects.image_available_semaphore;
@@ -2076,8 +2089,7 @@ impl VulkanApp {
         let image_index = match result {
             Ok((image_index, _)) => image_index,
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                self.recreate_swapchain();
-                return;
+                return true;
             }
             Err(error) => panic!("Error while acquiring next image. Cause: {}", error),
         };
@@ -2123,20 +2135,15 @@ impl VulkanApp {
                     .queue_present(self.present_queue, &present_info)
             };
             match result {
-                Ok(is_suboptimal) if is_suboptimal => {
-                    self.recreate_swapchain();
-                }
-                Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    self.recreate_swapchain();
+                Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                    return true;
                 }
                 Err(error) => panic!("Failed to present queue. Cause: {}", error),
                 _ => {}
             }
-
-            if self.resize_dimensions.is_some() {
-                self.recreate_swapchain();
-            }
         }
+
+        false
     }
 
     /// Recreates the swapchain.
@@ -2147,16 +2154,10 @@ impl VulkanApp {
     /// If the window has been minimized, then the functions block until
     /// the window is maximized. This is because a width or height of 0
     /// is not legal.
-    fn recreate_swapchain(&mut self) {
+    pub fn recreate_swapchain(&mut self) {
         log::debug!("Recreating swapchain.");
 
-        if self.has_window_been_minimized() {
-            while !self.has_window_been_maximized() {
-                self.process_event();
-            }
-        }
-
-        unsafe { self.vk_context.device().device_wait_idle().unwrap() };
+        self.wait_gpu_idle();
 
         self.cleanup_swapchain();
 
@@ -2235,20 +2236,6 @@ impl VulkanApp {
         self.depth_texture = depth_texture;
         self.swapchain_framebuffers = swapchain_framebuffers;
         self.command_buffers = command_buffers;
-    }
-
-    fn has_window_been_minimized(&self) -> bool {
-        match self.resize_dimensions {
-            Some([x, y]) if x == 0 || y == 0 => true,
-            _ => false,
-        }
-    }
-
-    fn has_window_been_maximized(&self) -> bool {
-        match self.resize_dimensions {
-            Some([x, y]) if x > 0 && y > 0 => true,
-            _ => false,
-        }
     }
 
     /// Clean up the swapchain and all resources that depends on it.
@@ -2449,9 +2436,4 @@ impl UniformBufferObject {
             // .immutable_samplers() null since we're not creating a sampler descriptor
             .build()
     }
-}
-
-fn main() {
-    env_logger::init();
-    VulkanApp::new().run()
 }
