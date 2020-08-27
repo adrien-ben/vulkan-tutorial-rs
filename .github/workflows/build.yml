@@ -23,16 +23,3 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-  # Build the Android apk using the cargo-apk Docker image
-  apk:
-    name: Android apk build
-    runs-on: "ubuntu-latest"
-    steps:
-      - uses: actions/checkout@v1
-      - name: Build apk
-        run: docker run --env SKIP_SHADER_COMPILATION=true --rm -v $(pwd):/root/src philipalldredge/cargo-apk cargo apk build --release
-      - name: Upload apk
-        uses: actions/upload-artifact@master
-        with:
-          name: vk-triangle-rs-apk
-          path: target/android-artifacts/release/apk/vulkan-tutorial-ash.apk
