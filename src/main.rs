@@ -87,6 +87,8 @@ fn main() {
                         let size = window.inner_size();
                         if size.width > 0 && size.height > 0 {
                             app.recreate_swapchain();
+                        } else {
+                            return;
                         }
                     }
                     dirty_swapchain = app.draw_frame();
