@@ -1,6 +1,8 @@
-# Vulkan tutorial
+# Extended Vulkan tutorial
 
-![][8]
+![Badge][8]
+
+**The content of this branch builds upon the work we did in the tutorial by adding new features.**
 
 Vulkan [tutorials][0] written in Rust using [Ash][1]. The [extended][10] branch contains a few more
 chapters that I won't merge on that branch since I want it to stay close to the original tutorial.
@@ -10,8 +12,8 @@ Please check it out :). If you wan't to run it on android see the [android][11] 
 
 ## Introduction
 
-This repository will follow the structure of the original tutorial. Each 
-commit will correspond to one page or on section of the page for 
+This repository will follow the structure of the original tutorial. Each
+commit will correspond to one page or on section of the page for
 long chapters.
 
 Sometimes an 'extra' commit will be added with some refactoring, commenting or feature.
@@ -22,7 +24,7 @@ able to test yet. I'll update this statement when I (or someone else) can try.
 
 ## Requirements
 
-You need to have a [Vulkan SDK][3] installed and  `glslangValidator` executable in your `PATH`. 
+You need to have a [Vulkan SDK][3] installed and  `glslangValidator` executable in your `PATH`.
 This should be the case when installing the Vulkan SDK.
 
 If for some reason you want to skip the shader compilation when buiding the project you can set
@@ -31,12 +33,12 @@ compiled shaders for the program to run.
 
 ## Commits
 
-This section contains the summary of the project commits. Follow :rabbit2: to go to the related 
+This section contains the summary of the project commits. Follow :rabbit2: to go to the related
 tutorial page.
 
 ### 1.1.1: Base code [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Setup/Base_code)
 
-Application setup. We don't setup the window system now as it's done in 
+Application setup. We don't setup the window system now as it's done in
 the original tutorial.
 
 ### 1.1.2: Instance [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Setup/Instance)
@@ -46,7 +48,7 @@ Create and destroy the Vulkan instance with required surface extensions.
 ### 1.1.3: Validation layers [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Setup/Validation_layers)
 
 Add `VK_LAYER_LUNARG_standard_validation` at instance creation and creates
-a debug report callback function after checking that it is available. 
+a debug report callback function after checking that it is available.
 Since we are using the `log` crate, we log the message with the proper log level.
 The callback is detroyed at application termination.
 
@@ -61,7 +63,7 @@ the graphics queue from the device.
 
 ### 1.1.extra: Refactoring and comments
 
-- Update the readme with explanations on the structure of the repository. 
+- Update the readme with explanations on the structure of the repository.
 - Move validation layers related code to its own module.
 - Disabled validation layers on release build.
 
@@ -74,7 +76,7 @@ At that point, the code will only work on Windows.
 ### 1.2.2: Swapchain [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Presentation/Swap_chain)
 
 Checks for swapchain support and enable device extension for swapchain. Then
-query the swapchain details and choose the right settings. Then create the 
+query the swapchain details and choose the right settings. Then create the
 swapchain and retrieve the swapchain images.
 
 ### 1.2.3: Image views [:rabbit2:](https://vulkan-tutorial.com/Drawing_a_triangle/Presentation/Image_views)
@@ -132,11 +134,11 @@ Create the render pass.
 
 Create the `PipelineShaderStageCreateInfo` that we forgot in `1.3.2: Shader module`.
 
-Create the grahics pipeline. 
+Create the grahics pipeline.
 
 ### 1.3.extra: Shader compilation refactoring
 
-Until now we compiled the shaders with a `compile.bat` script that we have to run 
+Until now we compiled the shaders with a `compile.bat` script that we have to run
 manually before running the application. In this section, we will compite them
 when building the application using [Cargo][2]'s build scripts.
 
@@ -203,7 +205,7 @@ Create and fill the vertex buffer and bind it before rendering.
 ### 2.3: Staging buffer [:rabbit2:](https://vulkan-tutorial.com/Vertex_buffers/Staging_buffer)
 
 Create a staging buffer for the vertex data and copy the vertex data from this buffer's
-memory to the memory of the device local buffer. 
+memory to the memory of the device local buffer.
 
 The tutorial also suggests that we allocate command buffers used for memory copy from
 a command pool dedicated to short-lived command buffers, so we did that too.
@@ -225,7 +227,7 @@ Create a `UniformBufferObject` structure containing transformation matrices and 
 descriptor layout and buffers used to make it accessible from the vertex shader.
 
 Also add a `math` module containing a `perspective` function that creates a prespective matrix
-that is working with Vulkan's NDC. 
+that is working with Vulkan's NDC.
 
 ### 3.2: Descriptor pool and sets [:rabbit2:](https://vulkan-tutorial.com/Uniform_buffers/Descriptor_pool_and_sets)
 
@@ -257,7 +259,7 @@ Create the image view and sampler. Also enable the sampler anisotropy feature.
 
 ### 4.3: Combined image sampler [:rabbit2:](https://vulkan-tutorial.com/Texture_mapping/Combined_image_sampler)
 
-Update the descriptor set, add texture coordinates to `Vertex` and update the 
+Update the descriptor set, add texture coordinates to `Vertex` and update the
 shaders to read texture coordinates and sample the texture.
 
 ![Textured.](screenshots/texture.png)
@@ -304,6 +306,40 @@ Generate mipmaps for the model texture and update the sampler to make use of the
 Add multisampling anti-aliasing.
 
 ![The end result](screenshots/end.png)
+
+### 9: Push constants
+
+Here we will render the chalet multiple times. To do that we're going to use push constants
+to push transform data within the command buffer.
+
+Until now we have been passing data to the shaders using uniform buffers and samplers. We can also
+use push constants. Push constants are data which is sent with the command buffer. The maximum size
+for push contants is very limited but should be at least 128 bytes to be complient with Vulkan specs.
+You can check the maximum size supported by your hardware with `VkPhysicalDeviceLimits::maxPushConstantsSize`.
+
+We will use push constants to pass the model transformation matrix to the vertex shader. Since our
+geometry is static we won't need to update the push constant so we're going to push them alongside
+our main command buffer.
+
+First you'll need to update the `create_pipeline` method and modify the pipeline layout creation to add
+a `VkPushConstantRange` instance. We need to specify the shader stage in which the constants will be pushed,
+an offset value and the size in bytes of the constants.
+
+Then we will need to update `create_and_register_command_buffers` to record the command to push the constants
+using `vkCmdPushConstants`.
+
+Finally, we can remove the model attribute from our `UniformBufferObject` structure. Since it now only
+contains camera matrices we will rename it `CameraUBO`. We also made so changes to the default camera
+position to have a better view of the scene.
+
+We're almost done, we still need to update the vertex shader code to declare the push constant that we
+are going to use. The synthax is close to declaring a uniform buffer structure execpt we replace the
+`binding = x` attribute with `push_constant`. Also we need to remove the model attribute from the uniform
+buffer structure.
+
+And we're done, the scene now renders with two chalets side by side.
+
+![Adding a new chalet](screenshots/extended_push_constants.png)
 
 ## Run it
 

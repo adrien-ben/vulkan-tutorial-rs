@@ -15,7 +15,7 @@ use ash::{
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
 };
 use ash::{vk, Device, Entry, Instance};
-use cgmath::{Deg, Matrix4, Point3, Vector3};
+use cgmath::{vec3, Deg, Matrix4, Point3, Vector3};
 use std::{
     ffi::{CStr, CString},
     mem::{align_of, size_of},
@@ -779,7 +779,7 @@ impl VulkanApp {
     }
 
     fn create_descriptor_set_layout(device: &Device) -> vk::DescriptorSetLayout {
-        let ubo_binding = UniformBufferObject::get_descriptor_set_layout_binding();
+        let ubo_binding = CameraUBO::get_descriptor_set_layout_binding();
         let sampler_binding = vk::DescriptorSetLayoutBinding::builder()
             .binding(1)
             .descriptor_count(1)
@@ -844,7 +844,7 @@ impl VulkanApp {
                 let buffer_info = vk::DescriptorBufferInfo::builder()
                     .buffer(*buffer)
                     .offset(0)
-                    .range(size_of::<UniformBufferObject>() as vk::DeviceSize)
+                    .range(size_of::<CameraUBO>() as vk::DeviceSize)
                     .build();
                 let buffer_infos = [buffer_info];
 
@@ -990,9 +990,14 @@ impl VulkanApp {
 
         let layout = {
             let layouts = [descriptor_set_layout];
+            let push_constant_ranges = vk::PushConstantRange {
+                stage_flags: vk::ShaderStageFlags::VERTEX,
+                offset: 0,
+                size: size_of::<Matrix4<f32>>() as _,
+            };
             let layout_info = vk::PipelineLayoutCreateInfo::builder()
                 .set_layouts(&layouts)
-                // .push_constant_ranges
+                .push_constant_ranges(&[push_constant_ranges])
                 .build();
 
             unsafe { device.create_pipeline_layout(&layout_info, None).unwrap() }
@@ -1757,7 +1762,7 @@ impl VulkanApp {
         vk_context: &VkContext,
         count: usize,
     ) -> (Vec<vk::Buffer>, Vec<vk::DeviceMemory>) {
-        let size = size_of::<UniformBufferObject>() as vk::DeviceSize;
+        let size = size_of::<CameraUBO>() as vk::DeviceSize;
         let mut buffers = Vec::new();
         let mut memories = Vec::new();
 
@@ -2017,8 +2022,26 @@ impl VulkanApp {
                 )
             };
 
-            // Draw
-            unsafe { device.cmd_draw_indexed(buffer, index_count as _, 1, 0, 0, 0) };
+            // Render objects
+            let base_rot = Matrix4::from_angle_x(Deg(270.0));
+            let transform_0 = Matrix4::from_translation(vec3(0.1, 0.0, -1.0)) * base_rot;
+            let transform_1 = Matrix4::from_translation(vec3(-0.1, 0.0, 1.0)) * base_rot;
+
+            Self::cmd_draw_chalet(
+                device,
+                buffer,
+                index_count,
+                pipeline_layout,
+                transform_0,
+            );
+
+            Self::cmd_draw_chalet(
+                device,
+                buffer,
+                index_count,
+                pipeline_layout,
+                transform_1,
+            );
 
             // End render pass
             unsafe { device.cmd_end_render_pass(buffer) };
@@ -2028,6 +2051,28 @@ impl VulkanApp {
         });
 
         buffers
+    }
+
+    fn cmd_draw_chalet(
+        device: &Device,
+        buffer: vk::CommandBuffer,
+        index_count: usize,
+        pipeline_layout: vk::PipelineLayout,
+        transform: Matrix4<f32>,
+    ) {
+        // Push constants
+        unsafe {
+            device.cmd_push_constants(
+                buffer,
+                pipeline_layout,
+                vk::ShaderStageFlags::VERTEX,
+                0,
+                any_as_u8_slice(&transform),
+            )
+        };
+
+        // Draw
+        unsafe { device.cmd_draw_indexed(buffer, index_count as _, 1, 0, 0, 0) };
     }
 
     fn create_sync_objects(device: &Device) -> InFlightFrames {
@@ -2275,8 +2320,7 @@ impl VulkanApp {
 
         let aspect = self.swapchain_properties.extent.width as f32
             / self.swapchain_properties.extent.height as f32;
-        let ubo = UniformBufferObject {
-            model: Matrix4::from_angle_x(Deg(270.0)),
+        let ubo = CameraUBO {
             view: Matrix4::look_at(
                 self.camera.position(),
                 Point3::new(0.0, 0.0, 0.0),
@@ -2287,7 +2331,7 @@ impl VulkanApp {
         let ubos = [ubo];
 
         let buffer_mem = self.uniform_buffer_memories[current_image as usize];
-        let size = size_of::<UniformBufferObject>() as vk::DeviceSize;
+        let size = size_of::<CameraUBO>() as vk::DeviceSize;
         unsafe {
             let device = self.vk_context.device();
             let data_ptr = device
@@ -2422,13 +2466,12 @@ impl Vertex {
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
-struct UniformBufferObject {
-    model: Matrix4<f32>,
+struct CameraUBO {
     view: Matrix4<f32>,
     proj: Matrix4<f32>,
 }
 
-impl UniformBufferObject {
+impl CameraUBO {
     fn get_descriptor_set_layout_binding() -> vk::DescriptorSetLayoutBinding {
         vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
@@ -2438,4 +2481,10 @@ impl UniformBufferObject {
             // .immutable_samplers() null since we're not creating a sampler descriptor
             .build()
     }
+}
+
+/// Return a `&[u8]` for any sized object passed in.
+unsafe fn any_as_u8_slice<T: Sized>(any: &T) -> &[u8] {
+    let ptr = (any as *const T) as *const u8;
+    std::slice::from_raw_parts(ptr, std::mem::size_of::<T>())
 }
