@@ -4,7 +4,7 @@
 
 Vulkan [tutorials][0] written in Rust using [Ash][1]. The [extended][10] branch contains a few more
 chapters that I won't merge on that branch since I want it to stay close to the original tutorial.
-Please check it out :). If you wan't to run it on android see the [android][11] branch.
+Please check it out :).
 
 ![The end result](screenshots/end.png)
 
@@ -321,6 +321,18 @@ or without:
 cargo run --release
 ```
 
+## Run it on Android
+
+We use [android-ndk-rs][ndk-rs] to run the application on Android devices.
+
+```sh
+export JAVA_HOME=C:\\"Program Files"\\OpenJDK\\jdk-12.0.1
+# Run the apk on a connected device/emulator
+cargo apk run
+# See log output
+adb logcat RustStdoutStderr:D *:S
+```
+
 ## Links
 
 [Vulkan tutotial][0]
@@ -353,4 +365,4 @@ Thanks to Alexander Overvoorde for this amazing tutorials.
 [7]: https://sketchfab.com/3d-models/chalet-hippolyte-chassande-baroz-e925320e1d5744d9ae661aeff61e7aef
 [8]: https://github.com/adrien-ben/vulkan-tutorial-rs/workflows/Cross-platform%20build/badge.svg
 [10]: https://github.com/adrien-ben/vulkan-tutorial-rs/tree/extended
-[11]: https://github.com/adrien-ben/vulkan-tutorial-rs/tree/android
+[ndk-rs]: https://github.com/rust-windowing/android-ndk-rs

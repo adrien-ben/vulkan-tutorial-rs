@@ -4,15 +4,16 @@ on: [push]
 
 jobs:
   # Build the project on linux, windows and macos
-  build:
-    name: Build on ${{ matrix.os }}
+  build-desktop:
+    name: Build on Desktop (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: ["ubuntu-latest", "windows-latest", "macos-latest"]
     steps:
-      - uses: actions/checkout@v1
-      - name: Install toolchain
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
             toolchain: stable
@@ -23,3 +24,89 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
+
+  # Build the various Android targets
+  build-android:
+    name: Build on Android (${{ matrix.rust-target }})
+    runs-on: "ubuntu-latest"
+    strategy:
+      matrix:
+        rust-target: [
+            'armv7-linux-androideabi',
+            'aarch64-linux-android',
+            'i686-linux-android',
+            'x86_64-linux-android',
+        ]    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Download NDK
+        run: |
+          curl -LO https://dl.google.com/android/repository/android-ndk-r20-linux-x86_64.zip
+          unzip android-ndk-r20-linux-x86_64.zip -d $GITHUB_WORKSPACE
+      - name: Setup java
+        uses: actions/setup-java@v1
+        with:
+          java-package: jre
+          java-version: '15'
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.rust-target }}
+          override: true
+      - name: Install cargo-apk
+        run:
+          cargo install cargo-apk
+      - name: Build
+        run: |
+          export NDK_HOME="$GITHUB_WORKSPACE/android-ndk-r20"
+          export CC="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          export AR="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+          export SKIP_SHADER_COMPILATION=true
+          cargo apk build --release --target ${{ matrix.rust-target }}
+
+  # Build a multi target APK
+  build-apk:
+    name: Build Android APK
+    needs: build-android
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Download NDK
+        run: |
+          curl -LO https://dl.google.com/android/repository/android-ndk-r20-linux-x86_64.zip
+          unzip android-ndk-r20-linux-x86_64.zip -d $GITHUB_WORKSPACE
+      - name: Setup java
+        uses: actions/setup-java@v1
+        with:
+          java-package: jre
+          java-version: '15'
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      # Must install at least the targets declared in Cargo.toml
+      - name: Install Android targets
+        run: |
+          rustup target add armv7-linux-androideabi
+          rustup target add aarch64-linux-android
+          rustup target add i686-linux-android
+          rustup target add x86_64-linux-android
+      - name: Install cargo-apk
+        run:
+          cargo install cargo-apk
+      - name: Build
+        run: |
+          export NDK_HOME="$GITHUB_WORKSPACE/android-ndk-r20"
+          export CC="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          export AR="$NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar"
+          export SKIP_SHADER_COMPILATION=true
+          cargo apk build --release
+      - name: Upload
+        uses: actions/upload-artifact@v2
+        with:
+          name: vulkan-tutorial.apk
+          path: "target/release/apk/Vulkan Tutorial Rust.apk"

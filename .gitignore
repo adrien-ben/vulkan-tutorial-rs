@@ -1,6 +1,5 @@
 /target
 **/*.rs.bk
-**/*.spv
 /.vscode
 Cargo.lock
 .idea
