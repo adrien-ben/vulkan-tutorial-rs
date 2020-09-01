@@ -5,6 +5,9 @@ authors = ["Adrien Bennadji <adrien.bennadji@live.fr>"]
 edition = "2018"
 build = "build.rs"
 
+[lib]
+crate-type = ["lib", "cdylib"]
+
 [dependencies]
 log = "0.4"
 env_logger = "0.7"
@@ -14,3 +17,19 @@ cgmath = "0.17"
 image = "0.23"
 tobj = "2.0"
 winit = "0.22"
+
+[patch.crates-io]
+winit = { git = "https://github.com/rust-windowing/winit" }
+
+[target.'cfg(target_os = "android")'.dependencies]
+ndk-glue = "0.2"
+
+[package.metadata.android]
+apk_label = "Vulkan Tutorial Rust"
+assets = "assets"
+build_targets = [
+    "armv7-linux-androideabi",
+    "aarch64-linux-android",
+    "i686-linux-android",
+    "x86_64-linux-android"
+]
