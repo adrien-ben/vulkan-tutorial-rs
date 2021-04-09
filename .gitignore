@@ -3,3 +3,4 @@
 **/*.spv
 /.vscode
 Cargo.lock
+.idea

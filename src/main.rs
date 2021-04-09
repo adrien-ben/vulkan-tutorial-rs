@@ -9,7 +9,7 @@ mod texture;
 use crate::{camera::*, context::*, debug::*, swapchain::*, texture::*};
 use ash::{
     extensions::{
-        ext::DebugReport,
+        ext::DebugUtils,
         khr::{Surface, Swapchain},
     },
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
@@ -174,7 +174,7 @@ impl VulkanApp {
     fn new(window: &Window) -> Self {
         log::debug!("Creating application.");
 
-        let entry = Entry::new().expect("Failed to create entry.");
+        let entry = unsafe { Entry::new().expect("Failed to create entry.") };
         let instance = Self::create_instance(&entry, window);
 
         let surface = Surface::new(&entry, &instance);
@@ -361,7 +361,7 @@ impl VulkanApp {
             .map(|ext| ext.as_ptr())
             .collect::<Vec<_>>();
         if ENABLE_VALIDATION_LAYERS {
-            extension_names.push(DebugReport::name().as_ptr());
+            extension_names.push(DebugUtils::name().as_ptr());
         }
 
         let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
@@ -1191,7 +1191,7 @@ impl VulkanApp {
         let image = image::load(cursor, image::ImageFormat::Jpeg)
             .unwrap()
             .flipv();
-        let image_as_rgb = image.to_rgba();
+        let image_as_rgb = image.to_rgba8();
         let width = (&image_as_rgb).width();
         let height = (&image_as_rgb).height();
         let max_mip_levels = ((width.min(height) as f32).log2().floor() + 1.0) as u32;
@@ -2277,7 +2277,7 @@ impl VulkanApp {
             / self.swapchain_properties.extent.height as f32;
         let ubo = UniformBufferObject {
             model: Matrix4::from_angle_x(Deg(270.0)),
-            view: Matrix4::look_at(
+            view: Matrix4::look_at_rh(
                 self.camera.position(),
                 Point3::new(0.0, 0.0, 0.0),
                 Vector3::new(0.0, 1.0, 0.0),
