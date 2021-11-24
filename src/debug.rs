@@ -1,4 +1,4 @@
-use ash::{extensions::ext::DebugUtils, version::EntryV1_0};
+use ash::extensions::ext::DebugUtils;
 use ash::{vk, Entry, Instance};
 use std::{
     ffi::{CStr, CString},

@@ -7,12 +7,9 @@ mod swapchain;
 mod texture;
 
 use crate::{camera::*, context::*, debug::*, swapchain::*, texture::*};
-use ash::{
-    extensions::{
-        ext::DebugUtils,
-        khr::{Surface, Swapchain},
-    },
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
+use ash::extensions::{
+    ext::DebugUtils,
+    khr::{Surface, Swapchain},
 };
 use ash::{vk, Device, Entry, Instance};
 use cgmath::{Deg, Matrix4, Point3, Vector3};
@@ -349,10 +346,10 @@ impl VulkanApp {
         let engine_name = CString::new("No Engine").unwrap();
         let app_info = vk::ApplicationInfo::builder()
             .application_name(app_name.as_c_str())
-            .application_version(vk::make_version(0, 1, 0))
+            .application_version(vk::make_api_version(0, 0, 1, 0))
             .engine_name(engine_name.as_c_str())
-            .engine_version(vk::make_version(0, 1, 0))
-            .api_version(vk::make_version(1, 0, 0))
+            .engine_version(vk::make_api_version(0, 0, 1, 0))
+            .api_version(vk::make_api_version(0, 1, 0, 0))
             .build();
 
         let extension_names = ash_window::enumerate_required_extensions(window).unwrap();
@@ -1639,9 +1636,15 @@ impl VulkanApp {
     fn load_model() -> (Vec<Vertex>, Vec<u32>) {
         log::debug!("Loading model.");
         let mut cursor = fs::load("models/chalet.obj");
-        let (models, _) = tobj::load_obj_buf(&mut cursor, true, |_| {
-            Ok((vec![], std::collections::HashMap::new()))
-        })
+        let (models, _) = tobj::load_obj_buf(
+            &mut cursor,
+            &tobj::LoadOptions {
+                single_index: true,
+                triangulate: true,
+                ..Default::default()
+            },
+            |_| Ok((vec![], ahash::AHashMap::new())),
+        )
         .unwrap();
 
         let mesh = &models[0].mesh;
