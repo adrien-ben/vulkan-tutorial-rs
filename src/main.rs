@@ -5,21 +5,22 @@ mod fs;
 mod math;
 mod swapchain;
 mod texture;
+mod offset;
+mod vertex;
 
-use crate::{camera::*, context::*, debug::*, swapchain::*, texture::*};
-use ash::{
-    extensions::{
-        ext::DebugReport,
-        khr::{Surface, Swapchain},
-    },
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-};
-use ash::{vk, Device, Entry, Instance};
-use cgmath::{vec3, Deg, Matrix4, Point3, Vector3};
+use crate::{camera::*, context::*, debug::*, swapchain::*, texture::*, vertex::*};
+use ash::{extensions::{ext::DebugUtils, khr::{Surface, Swapchain}}, vk, Device, Entry, Instance};
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
+use cgmath::{vec3, Deg, Matrix4, Point3, Rad, Vector3};
 use std::{
-    ffi::{CStr, CString},
-    mem::{align_of, size_of},
+    ffi::{CStr, CString}, mem::{align_of, size_of}
 };
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+use ash::vk::{
+    KhrGetPhysicalDeviceProperties2Fn, KhrPortabilityEnumerationFn,
+};
+
 use winit::{
     dpi::PhysicalSize,
     event::{ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent},
@@ -174,12 +175,18 @@ impl VulkanApp {
     fn new(window: &Window) -> Self {
         log::debug!("Creating application.");
 
-        let entry = Entry::new().expect("Failed to create entry.");
+        let entry = Entry::linked();
         let instance = Self::create_instance(&entry, window);
 
         let surface = Surface::new(&entry, &instance);
         let surface_khr =
-            unsafe { ash_window::create_surface(&entry, &instance, window, None).unwrap() };
+            unsafe { ash_window::create_surface(
+                &entry,
+                &instance,
+                window.raw_display_handle(),
+                window.raw_window_handle(),
+                None,
+            ).unwrap() };
 
         let debug_report_callback = setup_debug_messenger(&entry, &instance);
 
@@ -349,26 +356,43 @@ impl VulkanApp {
         let engine_name = CString::new("No Engine").unwrap();
         let app_info = vk::ApplicationInfo::builder()
             .application_name(app_name.as_c_str())
-            .application_version(vk::make_version(0, 1, 0))
+            .application_version(vk::make_api_version(0, 0, 1, 0))
             .engine_name(engine_name.as_c_str())
-            .engine_version(vk::make_version(0, 1, 0))
-            .api_version(vk::make_version(1, 0, 0))
+            .engine_version(vk::make_api_version(0, 0, 1, 0))
+            .api_version(vk::make_api_version(0, 1, 0, 0))
             .build();
 
-        let extension_names = ash_window::enumerate_required_extensions(window).unwrap();
+        let extension_names = ash_window::enumerate_required_extensions(window.raw_display_handle()).unwrap();
         let mut extension_names = extension_names
             .iter()
-            .map(|ext| ext.as_ptr())
+            .map(|ext| *ext)
             .collect::<Vec<_>>();
+
         if ENABLE_VALIDATION_LAYERS {
-            extension_names.push(DebugReport::name().as_ptr());
+            extension_names.push(DebugUtils::name().as_ptr());
+        }
+
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            extension_names.push(KhrPortabilityEnumerationFn::name().as_ptr());
+            // Enabling this extension is a requirement when using `VK_KHR_portability_subset`
+            extension_names.push(KhrGetPhysicalDeviceProperties2Fn::name().as_ptr());
         }
 
         let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
 
+
+        let create_flags = if cfg!(any(target_os = "macos", target_os = "ios")) {
+            vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR
+        } else {
+            vk::InstanceCreateFlags::default()
+        };
+
         let mut instance_create_info = vk::InstanceCreateInfo::builder()
             .application_info(&app_info)
-            .enabled_extension_names(&extension_names);
+            .enabled_extension_names(&extension_names)
+            .flags(create_flags);
+
         if ENABLE_VALIDATION_LAYERS {
             check_validation_layer_support(&entry);
             instance_create_info = instance_create_info.enabled_layer_names(&layer_names_ptrs);
@@ -970,7 +994,7 @@ impl VulkanApp {
             .build();
 
         let color_blend_attachment = vk::PipelineColorBlendAttachmentState::builder()
-            .color_write_mask(vk::ColorComponentFlags::all())
+            .color_write_mask(vk::ColorComponentFlags::RGBA)
             .blend_enable(false)
             .src_color_blend_factor(vk::BlendFactor::ONE)
             .dst_color_blend_factor(vk::BlendFactor::ZERO)
@@ -1196,7 +1220,7 @@ impl VulkanApp {
         let image = image::load(cursor, image::ImageFormat::Jpeg)
             .unwrap()
             .flipv();
-        let image_as_rgb = image.to_rgba();
+        let image_as_rgb = image.to_rgba8();
         let width = (&image_as_rgb).width();
         let height = (&image_as_rgb).height();
         let max_mip_levels = ((width.min(height) as f32).log2().floor() + 1.0) as u32;
@@ -2421,46 +2445,6 @@ impl Iterator for InFlightFrames {
         self.current_frame = (self.current_frame + 1) % self.sync_objects.len();
 
         Some(next)
-    }
-}
-
-#[derive(Clone, Copy)]
-#[allow(dead_code)]
-struct Vertex {
-    pos: [f32; 3],
-    color: [f32; 3],
-    coords: [f32; 2],
-}
-
-impl Vertex {
-    fn get_binding_description() -> vk::VertexInputBindingDescription {
-        vk::VertexInputBindingDescription::builder()
-            .binding(0)
-            .stride(size_of::<Vertex>() as _)
-            .input_rate(vk::VertexInputRate::VERTEX)
-            .build()
-    }
-
-    fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
-        let position_desc = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(0)
-            .format(vk::Format::R32G32B32_SFLOAT)
-            .offset(0)
-            .build();
-        let color_desc = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(1)
-            .format(vk::Format::R32G32B32_SFLOAT)
-            .offset(12)
-            .build();
-        let coords_desc = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(2)
-            .format(vk::Format::R32G32_SFLOAT)
-            .offset(24)
-            .build();
-        [position_desc, color_desc, coords_desc]
     }
 }
 

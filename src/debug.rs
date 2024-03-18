@@ -1,8 +1,9 @@
-use ash::{extensions::ext::DebugReport, version::EntryV1_0};
+use ash::extensions::ext::DebugUtils;
 use ash::{vk, Entry, Instance};
 use std::{
     ffi::{CStr, CString},
     os::raw::{c_char, c_void},
+    borrow::Cow,
 };
 
 #[cfg(debug_assertions)]
@@ -13,26 +14,30 @@ pub const ENABLE_VALIDATION_LAYERS: bool = false;
 const REQUIRED_LAYERS: [&str; 1] = ["VK_LAYER_KHRONOS_validation"];
 
 unsafe extern "system" fn vulkan_debug_callback(
-    flag: vk::DebugReportFlagsEXT,
-    typ: vk::DebugReportObjectTypeEXT,
-    _: u64,
-    _: usize,
-    _: i32,
-    _: *const c_char,
-    p_message: *const c_char,
-    _: *mut c_void,
-) -> u32 {
-    if flag == vk::DebugReportFlagsEXT::DEBUG {
-        log::debug!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
-    } else if flag == vk::DebugReportFlagsEXT::INFORMATION {
-        log::info!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
-    } else if flag == vk::DebugReportFlagsEXT::WARNING {
-        log::warn!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
-    } else if flag == vk::DebugReportFlagsEXT::PERFORMANCE_WARNING {
-        log::warn!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
+    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    _user_data: *mut c_void,
+) -> vk::Bool32 {
+    let callback_data = *p_callback_data;
+    let message_id_number = callback_data.message_id_number;
+
+    let message_id_name = if callback_data.p_message_id_name.is_null() {
+        Cow::from("")
     } else {
-        log::error!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
-    }
+        CStr::from_ptr(callback_data.p_message_id_name).to_string_lossy()
+    };
+
+    let message = if callback_data.p_message.is_null() {
+        Cow::from("")
+    } else {
+        CStr::from_ptr(callback_data.p_message).to_string_lossy()
+    };
+
+    println!(
+        "{message_severity:?}:\n{message_type:?} [{message_id_name} ({message_id_number})] : {message}\n",
+    );
+
     vk::FALSE
 }
 
@@ -78,19 +83,30 @@ pub fn check_validation_layer_support(entry: &Entry) {
 pub fn setup_debug_messenger(
     entry: &Entry,
     instance: &Instance,
-) -> Option<(DebugReport, vk::DebugReportCallbackEXT)> {
+) -> Option<((DebugUtils, vk::DebugUtilsMessengerEXT))> {
     if !ENABLE_VALIDATION_LAYERS {
         return None;
     }
-    let create_info = vk::DebugReportCallbackCreateInfoEXT::builder()
-        .flags(vk::DebugReportFlagsEXT::all())
-        .pfn_callback(Some(vulkan_debug_callback))
-        .build();
-    let debug_report = DebugReport::new(entry, instance);
+
+    let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+        .message_severity(
+            vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
+                | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
+                | vk::DebugUtilsMessageSeverityFlagsEXT::INFO,
+        )
+        .message_type(
+            vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
+        )
+        .pfn_user_callback(Some(vulkan_debug_callback));
+
+    let debug_utils_loader = DebugUtils::new(&entry, &instance);
     let debug_report_callback = unsafe {
-        debug_report
-            .create_debug_report_callback(&create_info, None)
-            .unwrap()
+        debug_utils_loader
+        .create_debug_utils_messenger(&debug_info, None)
+        .unwrap()
     };
-    Some((debug_report, debug_report_callback))
+
+    Some((debug_utils_loader, debug_report_callback))
 }
