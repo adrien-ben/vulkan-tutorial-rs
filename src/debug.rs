@@ -78,9 +78,17 @@ pub fn setup_debug_messenger(
     }
 
     let create_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
-        .flags(vk::DebugUtilsMessengerCreateFlagsEXT::all())
-        .message_severity(vk::DebugUtilsMessageSeverityFlagsEXT::all())
-        .message_type(vk::DebugUtilsMessageTypeFlagsEXT::all())
+        .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
+        .message_severity(
+            vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
+                | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
+                | vk::DebugUtilsMessageSeverityFlagsEXT::INFO,
+        )
+        .message_type(
+            vk::DebugUtilsMessageTypeFlagsEXT::GENERAL
+                | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
+                | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
+        )
         .pfn_user_callback(Some(vulkan_debug_callback));
     let debug_utils = DebugUtils::new(entry, instance);
     let debug_utils_messenger = unsafe {

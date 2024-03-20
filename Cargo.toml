@@ -7,11 +7,12 @@ build = "build.rs"
 
 [dependencies]
 log = "0.4"
-env_logger = "0.9"
-ash = "0.33"
-ash-window = "0.7"
+env_logger = "0.11"
+ash = { version = "0.37", default-features = false, features = ["debug", "loaded"] }
+ash-window = "0.12"
+raw-window-handle = "0.5"
 cgmath = "0.18"
-image = "0.23"
-tobj = "3.2"
-ahash = "0.7.6"
-winit = "0.25"
+image = "0.25"
+tobj = "4.0"
+ahash = "0.8"
+winit = { version = "0.29", default-features = false, features = ["rwh_05"]}

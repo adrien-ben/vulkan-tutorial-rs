@@ -11,8 +11,11 @@ use ash::extensions::{
     ext::DebugUtils,
     khr::{Surface, Swapchain},
 };
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+use ash::vk::{KhrGetPhysicalDeviceProperties2Fn, KhrPortabilityEnumerationFn};
 use ash::{vk, Device, Entry, Instance};
 use cgmath::{Deg, Matrix4, Point3, Vector3};
+use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use std::{
     ffi::{CStr, CString},
     mem::{align_of, size_of},
@@ -31,7 +34,8 @@ const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 fn main() {
     env_logger::init();
 
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().unwrap();
+    event_loop.set_control_flow(ControlFlow::Poll);
     let window = WindowBuilder::new()
         .with_title("Vulkan tutorial with Ash")
         .with_inner_size(PhysicalSize::new(WIDTH, HEIGHT))
@@ -47,81 +51,81 @@ fn main() {
     let mut last_position = app.cursor_position;
     let mut wheel_delta = None;
 
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Poll;
-
-        match event {
-            Event::NewEvents(_) => {
-                // reset input states on new frame
-                {
-                    is_left_clicked = None;
-                    cursor_position = None;
-                    last_position = app.cursor_position;
-                    wheel_delta = None;
-                }
-            }
-            Event::MainEventsCleared => {
-                // update input state after accumulating event
-                {
-                    if let Some(is_left_clicked) = is_left_clicked {
-                        app.is_left_clicked = is_left_clicked;
+    event_loop
+        .run(move |event, elwt| {
+            match event {
+                Event::NewEvents(_) => {
+                    // reset input states on new frame
+                    {
+                        is_left_clicked = None;
+                        cursor_position = None;
+                        last_position = app.cursor_position;
+                        wheel_delta = None;
                     }
-                    if let Some(position) = cursor_position {
-                        app.cursor_position = position;
-                        app.cursor_delta = Some([
-                            position[0] - last_position[0],
-                            position[1] - last_position[1],
-                        ]);
-                    } else {
-                        app.cursor_delta = None;
-                    }
-                    app.wheel_delta = wheel_delta;
                 }
-
-                // render
-                {
-                    if dirty_swapchain {
-                        let size = window.inner_size();
-                        if size.width > 0 && size.height > 0 {
-                            app.recreate_swapchain();
+                Event::AboutToWait => {
+                    // update input state after accumulating event
+                    {
+                        if let Some(is_left_clicked) = is_left_clicked {
+                            app.is_left_clicked = is_left_clicked;
+                        }
+                        if let Some(position) = cursor_position {
+                            app.cursor_position = position;
+                            app.cursor_delta = Some([
+                                position[0] - last_position[0],
+                                position[1] - last_position[1],
+                            ]);
                         } else {
-                            return;
+                            app.cursor_delta = None;
+                        }
+                        app.wheel_delta = wheel_delta;
+                    }
+
+                    // render
+                    {
+                        if dirty_swapchain {
+                            let size = window.inner_size();
+                            if size.width > 0 && size.height > 0 {
+                                app.recreate_swapchain();
+                            } else {
+                                return;
+                            }
+                        }
+                        dirty_swapchain = app.draw_frame();
+                    }
+                }
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::CloseRequested => elwt.exit(),
+                    WindowEvent::Resized { .. } => dirty_swapchain = true,
+                    // Accumulate input events
+                    WindowEvent::MouseInput {
+                        button: MouseButton::Left,
+                        state,
+                        ..
+                    } => {
+                        if state == ElementState::Pressed {
+                            is_left_clicked = Some(true);
+                        } else {
+                            is_left_clicked = Some(false);
                         }
                     }
-                    dirty_swapchain = app.draw_frame();
-                }
-            }
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::Resized { .. } => dirty_swapchain = true,
-                // Accumulate input events
-                WindowEvent::MouseInput {
-                    button: MouseButton::Left,
-                    state,
-                    ..
-                } => {
-                    if state == ElementState::Pressed {
-                        is_left_clicked = Some(true);
-                    } else {
-                        is_left_clicked = Some(false);
+                    WindowEvent::CursorMoved { position, .. } => {
+                        let position: (i32, i32) = position.into();
+                        cursor_position = Some([position.0, position.1]);
                     }
-                }
-                WindowEvent::CursorMoved { position, .. } => {
-                    let position: (i32, i32) = position.into();
-                    cursor_position = Some([position.0, position.1]);
-                }
-                WindowEvent::MouseWheel {
-                    delta: MouseScrollDelta::LineDelta(_, v_lines),
-                    ..
-                } => {
-                    wheel_delta = Some(v_lines);
-                }
+                    WindowEvent::MouseWheel {
+                        delta: MouseScrollDelta::LineDelta(_, v_lines),
+                        ..
+                    } => {
+                        wheel_delta = Some(v_lines);
+                    }
+                    _ => (),
+                },
+                Event::LoopExiting => app.wait_gpu_idle(),
                 _ => (),
-            },
-            Event::LoopDestroyed => app.wait_gpu_idle(),
-            _ => (),
-        }
-    });
+            }
+        })
+        .unwrap();
 }
 
 struct VulkanApp {
@@ -171,12 +175,20 @@ impl VulkanApp {
     fn new(window: &Window) -> Self {
         log::debug!("Creating application.");
 
-        let entry = unsafe { Entry::new().expect("Failed to create entry.") };
+        let entry = unsafe { Entry::load().expect("Failed to create entry.") };
         let instance = Self::create_instance(&entry, window);
 
         let surface = Surface::new(&entry, &instance);
-        let surface_khr =
-            unsafe { ash_window::create_surface(&entry, &instance, window, None).unwrap() };
+        let surface_khr = unsafe {
+            ash_window::create_surface(
+                &entry,
+                &instance,
+                window.raw_display_handle(),
+                window.raw_window_handle(),
+                None,
+            )
+            .unwrap()
+        };
 
         let debug_report_callback = setup_debug_messenger(&entry, &instance);
 
@@ -352,20 +364,30 @@ impl VulkanApp {
             .api_version(vk::make_api_version(0, 1, 0, 0))
             .build();
 
-        let extension_names = ash_window::enumerate_required_extensions(window).unwrap();
-        let mut extension_names = extension_names
-            .iter()
-            .map(|ext| ext.as_ptr())
-            .collect::<Vec<_>>();
+        let extension_names =
+            ash_window::enumerate_required_extensions(window.raw_display_handle()).unwrap();
+        let mut extension_names = extension_names.iter().map(|ext| *ext).collect::<Vec<_>>();
         if ENABLE_VALIDATION_LAYERS {
             extension_names.push(DebugUtils::name().as_ptr());
+        }
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            extension_names.push(KhrPortabilityEnumerationFn::name().as_ptr());
+            // Enabling this extension is a requirement when using `VK_KHR_portability_subset`
+            extension_names.push(KhrGetPhysicalDeviceProperties2Fn::name().as_ptr());
         }
 
         let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
 
+        let create_flags = if cfg!(any(target_os = "macos", target_os = "ios")) {
+            vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR
+        } else {
+            vk::InstanceCreateFlags::default()
+        };
         let mut instance_create_info = vk::InstanceCreateInfo::builder()
             .application_info(&app_info)
-            .enabled_extension_names(&extension_names);
+            .enabled_extension_names(&extension_names)
+            .flags(create_flags);
         if ENABLE_VALIDATION_LAYERS {
             check_validation_layer_support(&entry);
             instance_create_info = instance_create_info.enabled_layer_names(&layer_names_ptrs);
@@ -541,17 +563,11 @@ impl VulkanApp {
             .sampler_anisotropy(true)
             .build();
 
-        let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
-
-        let mut device_create_info_builder = vk::DeviceCreateInfo::builder()
+        let device_create_info = vk::DeviceCreateInfo::builder()
             .queue_create_infos(&queue_create_infos)
             .enabled_extension_names(&device_extensions_ptrs)
-            .enabled_features(&device_features);
-        if ENABLE_VALIDATION_LAYERS {
-            device_create_info_builder =
-                device_create_info_builder.enabled_layer_names(&layer_names_ptrs)
-        }
-        let device_create_info = device_create_info_builder.build();
+            .enabled_features(&device_features)
+            .build();
 
         // Build device and queues
         let device = unsafe {
@@ -967,7 +983,7 @@ impl VulkanApp {
             .build();
 
         let color_blend_attachment = vk::PipelineColorBlendAttachmentState::builder()
-            .color_write_mask(vk::ColorComponentFlags::all())
+            .color_write_mask(vk::ColorComponentFlags::RGBA)
             .blend_enable(false)
             .src_color_blend_factor(vk::BlendFactor::ONE)
             .dst_color_blend_factor(vk::BlendFactor::ZERO)
@@ -2385,6 +2401,7 @@ impl Iterator for InFlightFrames {
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
+#[repr(C)]
 struct Vertex {
     pos: [f32; 3],
     color: [f32; 3],
