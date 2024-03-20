@@ -1,13 +1,12 @@
 use ash::{
-    extensions::{ext::DebugReport, khr::Surface},
-    version::{DeviceV1_0, InstanceV1_0},
-    vk, Device, Entry, Instance,
+    extensions::{ext::DebugUtils, khr::Surface},
+    vk::{self, DebugUtilsMessengerEXT}, Device, Entry, Instance,
 };
 
 pub struct VkContext {
     _entry: Entry,
     instance: Instance,
-    debug_report_callback: Option<(DebugReport, vk::DebugReportCallbackEXT)>,
+    debugging_info: Option<(DebugUtils, vk::DebugUtilsMessengerEXT)>,
     surface: Surface,
     surface_khr: vk::SurfaceKHR,
     physical_device: vk::PhysicalDevice,
@@ -94,7 +93,7 @@ impl VkContext {
     pub fn new(
         entry: Entry,
         instance: Instance,
-        debug_report_callback: Option<(DebugReport, vk::DebugReportCallbackEXT)>,
+        debugging_info: Option<(DebugUtils, DebugUtilsMessengerEXT)>,
         surface: Surface,
         surface_khr: vk::SurfaceKHR,
         physical_device: vk::PhysicalDevice,
@@ -103,7 +102,7 @@ impl VkContext {
         VkContext {
             _entry: entry,
             instance,
-            debug_report_callback,
+            debugging_info,
             surface,
             surface_khr,
             physical_device,
@@ -117,8 +116,8 @@ impl Drop for VkContext {
         unsafe {
             self.device.destroy_device(None);
             self.surface.destroy_surface(self.surface_khr, None);
-            if let Some((report, callback)) = self.debug_report_callback.take() {
-                report.destroy_debug_report_callback(callback, None);
+            if let Some((debug_utils_loader, callback)) = self.debugging_info.take() {
+                debug_utils_loader.destroy_debug_utils_messenger(callback, None);
             }
             self.instance.destroy_instance(None);
         }
