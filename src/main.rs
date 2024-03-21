@@ -18,7 +18,7 @@ use cgmath::{Deg, Matrix4, Point3, Vector3};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
 use std::{
     ffi::{CStr, CString},
-    mem::{align_of, size_of},
+    mem::{align_of, offset_of, size_of},
 };
 use winit::{
     dpi::PhysicalSize,
@@ -2422,19 +2422,19 @@ impl Vertex {
             .binding(0)
             .location(0)
             .format(vk::Format::R32G32B32_SFLOAT)
-            .offset(0)
+            .offset(offset_of!(Vertex, pos) as _)
             .build();
         let color_desc = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(1)
             .format(vk::Format::R32G32B32_SFLOAT)
-            .offset(12)
+            .offset(offset_of!(Vertex, color) as _)
             .build();
         let coords_desc = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(2)
             .format(vk::Format::R32G32_SFLOAT)
-            .offset(24)
+            .offset(offset_of!(Vertex, coords) as _)
             .build();
         [position_desc, color_desc, coords_desc]
     }
