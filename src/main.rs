@@ -3,7 +3,6 @@ mod context;
 mod debug;
 mod fs;
 mod math;
-mod offset;
 mod swapchain;
 mod texture;
 mod vertex;

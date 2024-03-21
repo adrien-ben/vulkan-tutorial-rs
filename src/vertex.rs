@@ -1,7 +1,5 @@
 use ash::vk;
-use std::mem::size_of;
-
-use crate::offset_of;
+use std::mem::{offset_of, size_of};
 
 #[derive(Clone, Copy, Debug)]
 #[allow(dead_code)]
