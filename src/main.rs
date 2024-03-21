@@ -3,23 +3,28 @@ mod context;
 mod debug;
 mod fs;
 mod math;
+mod offset;
 mod swapchain;
 mod texture;
-mod offset;
 mod vertex;
 
 use crate::{camera::*, context::*, debug::*, swapchain::*, texture::*, vertex::*};
-use ash::{extensions::{ext::DebugUtils, khr::{Surface, Swapchain}}, vk, Device, Entry, Instance};
+use ash::{
+    extensions::{
+        ext::DebugUtils,
+        khr::{Surface, Swapchain},
+    },
+    vk, Device, Entry, Instance,
+};
+use cgmath::{vec3, Deg, Matrix4, Point3, Vector3};
 use raw_window_handle::{HasRawDisplayHandle, HasRawWindowHandle};
-use cgmath::{vec3, Deg, Matrix4, Point3, Rad, Vector3};
 use std::{
-    ffi::{CStr, CString}, mem::{align_of, size_of}
+    ffi::{CStr, CString},
+    mem::{align_of, size_of},
 };
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-use ash::vk::{
-    KhrGetPhysicalDeviceProperties2Fn, KhrPortabilityEnumerationFn,
-};
+use ash::vk::{KhrGetPhysicalDeviceProperties2Fn, KhrPortabilityEnumerationFn};
 
 use winit::{
     dpi::PhysicalSize,
@@ -35,7 +40,8 @@ const MAX_FRAMES_IN_FLIGHT: u32 = 2;
 fn main() {
     env_logger::init();
 
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().unwrap();
+    event_loop.set_control_flow(ControlFlow::Poll);
     let window = WindowBuilder::new()
         .with_title("Vulkan tutorial with Ash")
         .with_inner_size(PhysicalSize::new(WIDTH, HEIGHT))
@@ -51,81 +57,81 @@ fn main() {
     let mut last_position = app.cursor_position;
     let mut wheel_delta = None;
 
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Poll;
-
-        match event {
-            Event::NewEvents(_) => {
-                // reset input states on new frame
-                {
-                    is_left_clicked = None;
-                    cursor_position = None;
-                    last_position = app.cursor_position;
-                    wheel_delta = None;
-                }
-            }
-            Event::MainEventsCleared => {
-                // update input state after accumulating event
-                {
-                    if let Some(is_left_clicked) = is_left_clicked {
-                        app.is_left_clicked = is_left_clicked;
+    event_loop
+        .run(move |event, elwt| {
+            match event {
+                Event::NewEvents(_) => {
+                    // reset input states on new frame
+                    {
+                        is_left_clicked = None;
+                        cursor_position = None;
+                        last_position = app.cursor_position;
+                        wheel_delta = None;
                     }
-                    if let Some(position) = cursor_position {
-                        app.cursor_position = position;
-                        app.cursor_delta = Some([
-                            position[0] - last_position[0],
-                            position[1] - last_position[1],
-                        ]);
-                    } else {
-                        app.cursor_delta = None;
-                    }
-                    app.wheel_delta = wheel_delta;
                 }
-
-                // render
-                {
-                    if dirty_swapchain {
-                        let size = window.inner_size();
-                        if size.width > 0 && size.height > 0 {
-                            app.recreate_swapchain();
+                Event::AboutToWait => {
+                    // update input state after accumulating event
+                    {
+                        if let Some(is_left_clicked) = is_left_clicked {
+                            app.is_left_clicked = is_left_clicked;
+                        }
+                        if let Some(position) = cursor_position {
+                            app.cursor_position = position;
+                            app.cursor_delta = Some([
+                                position[0] - last_position[0],
+                                position[1] - last_position[1],
+                            ]);
                         } else {
-                            return;
+                            app.cursor_delta = None;
+                        }
+                        app.wheel_delta = wheel_delta;
+                    }
+
+                    // render
+                    {
+                        if dirty_swapchain {
+                            let size = window.inner_size();
+                            if size.width > 0 && size.height > 0 {
+                                app.recreate_swapchain();
+                            } else {
+                                return;
+                            }
+                        }
+                        dirty_swapchain = app.draw_frame();
+                    }
+                }
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::CloseRequested => elwt.exit(),
+                    WindowEvent::Resized { .. } => dirty_swapchain = true,
+                    // Accumulate input events
+                    WindowEvent::MouseInput {
+                        button: MouseButton::Left,
+                        state,
+                        ..
+                    } => {
+                        if state == ElementState::Pressed {
+                            is_left_clicked = Some(true);
+                        } else {
+                            is_left_clicked = Some(false);
                         }
                     }
-                    dirty_swapchain = app.draw_frame();
-                }
-            }
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
-                WindowEvent::Resized { .. } => dirty_swapchain = true,
-                // Accumulate input events
-                WindowEvent::MouseInput {
-                    button: MouseButton::Left,
-                    state,
-                    ..
-                } => {
-                    if state == ElementState::Pressed {
-                        is_left_clicked = Some(true);
-                    } else {
-                        is_left_clicked = Some(false);
+                    WindowEvent::CursorMoved { position, .. } => {
+                        let position: (i32, i32) = position.into();
+                        cursor_position = Some([position.0, position.1]);
                     }
-                }
-                WindowEvent::CursorMoved { position, .. } => {
-                    let position: (i32, i32) = position.into();
-                    cursor_position = Some([position.0, position.1]);
-                }
-                WindowEvent::MouseWheel {
-                    delta: MouseScrollDelta::LineDelta(_, v_lines),
-                    ..
-                } => {
-                    wheel_delta = Some(v_lines);
-                }
+                    WindowEvent::MouseWheel {
+                        delta: MouseScrollDelta::LineDelta(_, v_lines),
+                        ..
+                    } => {
+                        wheel_delta = Some(v_lines);
+                    }
+                    _ => (),
+                },
+                Event::LoopExiting => app.wait_gpu_idle(),
                 _ => (),
-            },
-            Event::LoopDestroyed => app.wait_gpu_idle(),
-            _ => (),
-        }
-    });
+            }
+        })
+        .unwrap();
 }
 
 struct VulkanApp {
@@ -175,18 +181,20 @@ impl VulkanApp {
     fn new(window: &Window) -> Self {
         log::debug!("Creating application.");
 
-        let entry = Entry::linked();
+        let entry = unsafe { Entry::load().expect("Failed to create entry.") };
         let instance = Self::create_instance(&entry, window);
 
         let surface = Surface::new(&entry, &instance);
-        let surface_khr =
-            unsafe { ash_window::create_surface(
+        let surface_khr = unsafe {
+            ash_window::create_surface(
                 &entry,
                 &instance,
                 window.raw_display_handle(),
                 window.raw_window_handle(),
                 None,
-            ).unwrap() };
+            )
+            .unwrap()
+        };
 
         let debug_report_callback = setup_debug_messenger(&entry, &instance);
 
@@ -362,11 +370,9 @@ impl VulkanApp {
             .api_version(vk::make_api_version(0, 1, 0, 0))
             .build();
 
-        let extension_names = ash_window::enumerate_required_extensions(window.raw_display_handle()).unwrap();
-        let mut extension_names = extension_names
-            .iter()
-            .map(|ext| *ext)
-            .collect::<Vec<_>>();
+        let extension_names =
+            ash_window::enumerate_required_extensions(window.raw_display_handle()).unwrap();
+        let mut extension_names = extension_names.iter().map(|ext| *ext).collect::<Vec<_>>();
 
         if ENABLE_VALIDATION_LAYERS {
             extension_names.push(DebugUtils::name().as_ptr());
@@ -380,7 +386,6 @@ impl VulkanApp {
         }
 
         let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
-
 
         let create_flags = if cfg!(any(target_os = "macos", target_os = "ios")) {
             vk::InstanceCreateFlags::ENUMERATE_PORTABILITY_KHR
@@ -568,17 +573,11 @@ impl VulkanApp {
             .sampler_anisotropy(true)
             .build();
 
-        let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
-
-        let mut device_create_info_builder = vk::DeviceCreateInfo::builder()
+        let device_create_info = vk::DeviceCreateInfo::builder()
             .queue_create_infos(&queue_create_infos)
             .enabled_extension_names(&device_extensions_ptrs)
-            .enabled_features(&device_features);
-        if ENABLE_VALIDATION_LAYERS {
-            device_create_info_builder =
-                device_create_info_builder.enabled_layer_names(&layer_names_ptrs)
-        }
-        let device_create_info = device_create_info_builder.build();
+            .enabled_features(&device_features)
+            .build();
 
         // Build device and queues
         let device = unsafe {
@@ -1668,9 +1667,15 @@ impl VulkanApp {
     fn load_model() -> (Vec<Vertex>, Vec<u32>) {
         log::debug!("Loading model.");
         let mut cursor = fs::load("models/chalet.obj");
-        let (models, _) = tobj::load_obj_buf(&mut cursor, true, |_| {
-            Ok((vec![], std::collections::HashMap::new()))
-        })
+        let (models, _) = tobj::load_obj_buf(
+            &mut cursor,
+            &tobj::LoadOptions {
+                single_index: true,
+                triangulate: true,
+                ..Default::default()
+            },
+            |_| Ok((vec![], ahash::AHashMap::new())),
+        )
         .unwrap();
 
         let mesh = &models[0].mesh;
@@ -2051,21 +2056,9 @@ impl VulkanApp {
             let transform_0 = Matrix4::from_translation(vec3(0.1, 0.0, -1.0)) * base_rot;
             let transform_1 = Matrix4::from_translation(vec3(-0.1, 0.0, 1.0)) * base_rot;
 
-            Self::cmd_draw_chalet(
-                device,
-                buffer,
-                index_count,
-                pipeline_layout,
-                transform_0,
-            );
+            Self::cmd_draw_chalet(device, buffer, index_count, pipeline_layout, transform_0);
 
-            Self::cmd_draw_chalet(
-                device,
-                buffer,
-                index_count,
-                pipeline_layout,
-                transform_1,
-            );
+            Self::cmd_draw_chalet(device, buffer, index_count, pipeline_layout, transform_1);
 
             // End render pass
             unsafe { device.cmd_end_render_pass(buffer) };
@@ -2345,7 +2338,7 @@ impl VulkanApp {
         let aspect = self.swapchain_properties.extent.width as f32
             / self.swapchain_properties.extent.height as f32;
         let ubo = CameraUBO {
-            view: Matrix4::look_at(
+            view: Matrix4::look_at_rh(
                 self.camera.position(),
                 Point3::new(0.0, 0.0, 0.0),
                 Vector3::new(0.0, 1.0, 0.0),

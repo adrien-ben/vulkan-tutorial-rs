@@ -11,15 +11,8 @@ jobs:
       matrix:
         os: ["ubuntu-latest", "windows-latest", "macos-latest"]
     steps:
-      - uses: actions/checkout@v1
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-            toolchain: stable
-            override: true
+      - uses: actions/checkout@v4
       - name: Build
         env:
           SKIP_SHADER_COMPILATION: true
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
+        run: cargo build

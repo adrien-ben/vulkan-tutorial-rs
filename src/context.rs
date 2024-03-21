@@ -1,6 +1,7 @@
 use ash::{
     extensions::{ext::DebugUtils, khr::Surface},
-    vk::{self, DebugUtilsMessengerEXT}, Device, Entry, Instance,
+    vk::{self, DebugUtilsMessengerEXT},
+    Device, Entry, Instance,
 };
 
 pub struct VkContext {

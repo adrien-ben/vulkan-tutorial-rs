@@ -1,9 +1,9 @@
 use ash::extensions::ext::DebugUtils;
 use ash::{vk, Entry, Instance};
 use std::{
+    borrow::Cow,
     ffi::{CStr, CString},
     os::raw::{c_char, c_void},
-    borrow::Cow,
 };
 
 #[cfg(debug_assertions)]
@@ -83,7 +83,7 @@ pub fn check_validation_layer_support(entry: &Entry) {
 pub fn setup_debug_messenger(
     entry: &Entry,
     instance: &Instance,
-) -> Option<((DebugUtils, vk::DebugUtilsMessengerEXT))> {
+) -> Option<(DebugUtils, vk::DebugUtilsMessengerEXT)> {
     if !ENABLE_VALIDATION_LAYERS {
         return None;
     }
@@ -104,8 +104,8 @@ pub fn setup_debug_messenger(
     let debug_utils_loader = DebugUtils::new(&entry, &instance);
     let debug_report_callback = unsafe {
         debug_utils_loader
-        .create_debug_utils_messenger(&debug_info, None)
-        .unwrap()
+            .create_debug_utils_messenger(&debug_info, None)
+            .unwrap()
     };
 
     Some((debug_utils_loader, debug_report_callback))

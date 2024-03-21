@@ -1,10 +1,11 @@
-use std::mem::size_of;
 use ash::vk;
+use std::mem::size_of;
 
 use crate::offset_of;
 
 #[derive(Clone, Copy, Debug)]
 #[allow(dead_code)]
+#[repr(C)]
 pub struct Vertex {
     pub pos: [f32; 3],
     pub color: [f32; 3],
