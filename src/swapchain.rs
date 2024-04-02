@@ -1,4 +1,4 @@
-use ash::extensions::khr::Surface;
+use ash::khr::surface;
 use ash::vk;
 
 pub struct SwapchainSupportDetails {
@@ -8,7 +8,11 @@ pub struct SwapchainSupportDetails {
 }
 
 impl SwapchainSupportDetails {
-    pub fn new(device: vk::PhysicalDevice, surface: &Surface, surface_khr: vk::SurfaceKHR) -> Self {
+    pub fn new(
+        device: vk::PhysicalDevice,
+        surface: &surface::Instance,
+        surface_khr: vk::SurfaceKHR,
+    ) -> Self {
         let capabilities = unsafe {
             surface
                 .get_physical_device_surface_capabilities(device, surface_khr)

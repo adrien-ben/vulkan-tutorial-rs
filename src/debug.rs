@@ -1,5 +1,4 @@
-use ash::extensions::ext::DebugUtils;
-use ash::{vk, Entry, Instance};
+use ash::{ext::debug_utils, vk, Entry, Instance};
 use std::{
     borrow::Cow,
     ffi::{CStr, CString},
@@ -62,16 +61,13 @@ pub fn get_layer_names_and_pointers() -> (Vec<CString>, Vec<*const c_char>) {
 ///
 /// Panic if at least one on the layer is not supported.
 pub fn check_validation_layer_support(entry: &Entry) {
+    let supported_layers = unsafe { entry.enumerate_instance_layer_properties().unwrap() };
     for required in REQUIRED_LAYERS.iter() {
-        let found = entry
-            .enumerate_instance_layer_properties()
-            .unwrap()
-            .iter()
-            .any(|layer| {
-                let name = unsafe { CStr::from_ptr(layer.layer_name.as_ptr()) };
-                let name = name.to_str().expect("Failed to get layer name pointer");
-                required == &name
-            });
+        let found = supported_layers.iter().any(|layer| {
+            let name = unsafe { CStr::from_ptr(layer.layer_name.as_ptr()) };
+            let name = name.to_str().expect("Failed to get layer name pointer");
+            required == &name
+        });
 
         if !found {
             panic!("Validation layer not supported: {}", required);
@@ -83,12 +79,12 @@ pub fn check_validation_layer_support(entry: &Entry) {
 pub fn setup_debug_messenger(
     entry: &Entry,
     instance: &Instance,
-) -> Option<(DebugUtils, vk::DebugUtilsMessengerEXT)> {
+) -> Option<(debug_utils::Instance, vk::DebugUtilsMessengerEXT)> {
     if !ENABLE_VALIDATION_LAYERS {
         return None;
     }
 
-    let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+    let debug_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
         .message_severity(
             vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
                 | vk::DebugUtilsMessageSeverityFlagsEXT::WARNING
@@ -101,7 +97,7 @@ pub fn setup_debug_messenger(
         )
         .pfn_user_callback(Some(vulkan_debug_callback));
 
-    let debug_utils_loader = DebugUtils::new(&entry, &instance);
+    let debug_utils_loader = debug_utils::Instance::new(entry, instance);
     let debug_report_callback = unsafe {
         debug_utils_loader
             .create_debug_utils_messenger(&debug_info, None)

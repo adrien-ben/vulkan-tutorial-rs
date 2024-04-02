@@ -12,11 +12,10 @@ pub struct Vertex {
 
 impl Vertex {
     pub fn get_binding_description() -> vk::VertexInputBindingDescription {
-        vk::VertexInputBindingDescription::builder()
+        vk::VertexInputBindingDescription::default()
             .binding(0)
             .stride(size_of::<Vertex>() as _)
             .input_rate(vk::VertexInputRate::VERTEX)
-            .build()
     }
 
     pub fn get_attribute_descriptions() -> [vk::VertexInputAttributeDescription; 3] {
