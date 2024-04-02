@@ -1,5 +1,4 @@
-use ash::extensions::ext::DebugUtils;
-use ash::{vk, Entry, Instance};
+use ash::{ext::debug_utils, vk, Entry, Instance};
 use std::{
     ffi::{CStr, CString},
     os::raw::{c_char, c_void},
@@ -51,16 +50,13 @@ pub fn get_layer_names_and_pointers() -> (Vec<CString>, Vec<*const c_char>) {
 ///
 /// Panic if at least one on the layer is not supported.
 pub fn check_validation_layer_support(entry: &Entry) {
+    let supported_layers = unsafe { entry.enumerate_instance_layer_properties().unwrap() };
     for required in REQUIRED_LAYERS.iter() {
-        let found = entry
-            .enumerate_instance_layer_properties()
-            .unwrap()
-            .iter()
-            .any(|layer| {
-                let name = unsafe { CStr::from_ptr(layer.layer_name.as_ptr()) };
-                let name = name.to_str().expect("Failed to get layer name pointer");
-                required == &name
-            });
+        let found = supported_layers.iter().any(|layer| {
+            let name = unsafe { CStr::from_ptr(layer.layer_name.as_ptr()) };
+            let name = name.to_str().expect("Failed to get layer name pointer");
+            required == &name
+        });
 
         if !found {
             panic!("Validation layer not supported: {}", required);
@@ -72,12 +68,12 @@ pub fn check_validation_layer_support(entry: &Entry) {
 pub fn setup_debug_messenger(
     entry: &Entry,
     instance: &Instance,
-) -> Option<(DebugUtils, vk::DebugUtilsMessengerEXT)> {
+) -> Option<(debug_utils::Instance, vk::DebugUtilsMessengerEXT)> {
     if !ENABLE_VALIDATION_LAYERS {
         return None;
     }
 
-    let create_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+    let create_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
         .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
         .message_severity(
             vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
@@ -90,7 +86,7 @@ pub fn setup_debug_messenger(
                 | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
         )
         .pfn_user_callback(Some(vulkan_debug_callback));
-    let debug_utils = DebugUtils::new(entry, instance);
+    let debug_utils = debug_utils::Instance::new(entry, instance);
     let debug_utils_messenger = unsafe {
         debug_utils
             .create_debug_utils_messenger(&create_info, None)

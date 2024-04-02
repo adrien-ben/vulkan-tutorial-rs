@@ -33,13 +33,15 @@ where
     let c3r2 = -(far * near) / (far - near);
     let c3r3 = S::zero();
 
-    #[cfg_attr(rustfmt, rustfmt::skip)]
-    Matrix4::new(
+    #[rustfmt::skip]
+    let res = Matrix4::new(
         c0r0, c0r1, c0r2, c0r3,
         c1r0, c1r1, c1r2, c1r3,
         c2r0, c2r1, c2r2, c2r3,
         c3r0, c3r1, c3r2, c3r3,
-    )
+    );
+
+    res
 }
 
 /// Clamp `value` between `min` and `max`.

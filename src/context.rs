@@ -1,13 +1,10 @@
-use ash::{
-    extensions::{ext::DebugUtils, khr::Surface},
-    vk, Device, Entry, Instance,
-};
+use ash::{ext::debug_utils, khr::surface, vk, Device, Entry, Instance};
 
 pub struct VkContext {
     _entry: Entry,
     instance: Instance,
-    debug_report_callback: Option<(DebugUtils, vk::DebugUtilsMessengerEXT)>,
-    surface: Surface,
+    debug_report_callback: Option<(debug_utils::Instance, vk::DebugUtilsMessengerEXT)>,
+    surface: surface::Instance,
     surface_khr: vk::SurfaceKHR,
     physical_device: vk::PhysicalDevice,
     device: Device,
@@ -18,7 +15,7 @@ impl VkContext {
         &self.instance
     }
 
-    pub fn surface(&self) -> &Surface {
+    pub fn surface(&self) -> &surface::Instance {
         &self.surface
     }
 
@@ -93,8 +90,8 @@ impl VkContext {
     pub fn new(
         entry: Entry,
         instance: Instance,
-        debug_report_callback: Option<(DebugUtils, vk::DebugUtilsMessengerEXT)>,
-        surface: Surface,
+        debug_report_callback: Option<(debug_utils::Instance, vk::DebugUtilsMessengerEXT)>,
+        surface: surface::Instance,
         surface_khr: vk::SurfaceKHR,
         physical_device: vk::PhysicalDevice,
         device: Device,
