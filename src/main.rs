@@ -21,10 +21,11 @@ use std::{
 };
 
 use winit::{
+    application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::{ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
+    event::{ElementState, MouseButton, MouseScrollDelta, StartCause, WindowEvent},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    window::{Window, WindowId},
 };
 
 const WIDTH: u32 = 800;
@@ -36,96 +37,88 @@ fn main() {
 
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
-    let window = WindowBuilder::new()
-        .with_title("Vulkan tutorial with Ash")
-        .with_inner_size(PhysicalSize::new(WIDTH, HEIGHT))
-        .build(&event_loop)
-        .unwrap();
 
-    let mut app = VulkanApp::new(&window);
-    let mut dirty_swapchain = false;
+    let mut app = App::default();
+    event_loop.run_app(&mut app).unwrap();
+}
 
-    // Used to accumutate input events from the start to the end of a frame
-    let mut is_left_clicked = None;
-    let mut cursor_position = None;
-    let mut last_position = app.cursor_position;
-    let mut wheel_delta = None;
+#[derive(Default)]
+struct App {
+    window: Option<Window>,
+    vulkan: Option<VulkanApp>,
+}
 
-    event_loop
-        .run(move |event, elwt| {
-            match event {
-                Event::NewEvents(_) => {
-                    // reset input states on new frame
-                    {
-                        is_left_clicked = None;
-                        cursor_position = None;
-                        last_position = app.cursor_position;
-                        wheel_delta = None;
-                    }
-                }
-                Event::AboutToWait => {
-                    // update input state after accumulating event
-                    {
-                        if let Some(is_left_clicked) = is_left_clicked {
-                            app.is_left_clicked = is_left_clicked;
-                        }
-                        if let Some(position) = cursor_position {
-                            app.cursor_position = position;
-                            app.cursor_delta = Some([
-                                position[0] - last_position[0],
-                                position[1] - last_position[1],
-                            ]);
-                        } else {
-                            app.cursor_delta = None;
-                        }
-                        app.wheel_delta = wheel_delta;
-                    }
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let window = event_loop
+            .create_window(
+                Window::default_attributes()
+                    .with_title("Vulkan tutorial with Ash")
+                    .with_inner_size(PhysicalSize::new(WIDTH, HEIGHT)),
+            )
+            .unwrap();
 
-                    // render
-                    {
-                        if dirty_swapchain {
-                            let size = window.inner_size();
-                            if size.width > 0 && size.height > 0 {
-                                app.recreate_swapchain();
-                            } else {
-                                return;
-                            }
-                        }
-                        dirty_swapchain = app.draw_frame();
-                    }
-                }
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::CloseRequested => elwt.exit(),
-                    WindowEvent::Resized { .. } => dirty_swapchain = true,
-                    // Accumulate input events
-                    WindowEvent::MouseInput {
-                        button: MouseButton::Left,
-                        state,
-                        ..
-                    } => {
-                        if state == ElementState::Pressed {
-                            is_left_clicked = Some(true);
-                        } else {
-                            is_left_clicked = Some(false);
-                        }
-                    }
-                    WindowEvent::CursorMoved { position, .. } => {
-                        let position: (i32, i32) = position.into();
-                        cursor_position = Some([position.0, position.1]);
-                    }
-                    WindowEvent::MouseWheel {
-                        delta: MouseScrollDelta::LineDelta(_, v_lines),
-                        ..
-                    } => {
-                        wheel_delta = Some(v_lines);
-                    }
-                    _ => (),
-                },
-                Event::LoopExiting => app.wait_gpu_idle(),
-                _ => (),
+        self.vulkan = Some(VulkanApp::new(&window));
+        self.window = Some(window);
+    }
+
+    fn new_events(&mut self, _: &ActiveEventLoop, _: StartCause) {
+        // we need to check that the vulkan context has been created because `new_events` can be called before `resumed`.
+        if let Some(app) = self.vulkan.as_mut() {
+            app.wheel_delta = None;
+        }
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
+        match event {
+            WindowEvent::CloseRequested => {
+                event_loop.exit();
             }
-        })
-        .unwrap();
+            WindowEvent::Resized { .. } => {
+                self.vulkan.as_mut().unwrap().dirty_swapchain = true;
+            }
+            WindowEvent::MouseInput { button, state, .. } => {
+                self.vulkan.as_mut().unwrap().is_left_clicked =
+                    state == ElementState::Pressed && button == MouseButton::Left;
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                let app = self.vulkan.as_mut().unwrap();
+
+                let position: (i32, i32) = position.into();
+                app.cursor_delta = Some([
+                    app.cursor_position[0] - position.0,
+                    app.cursor_position[1] - position.1,
+                ]);
+                app.cursor_position = [position.0, position.1];
+            }
+            WindowEvent::MouseWheel {
+                delta: MouseScrollDelta::LineDelta(_, v_lines),
+                ..
+            } => {
+                self.vulkan.as_mut().unwrap().wheel_delta = Some(v_lines);
+            }
+            _ => (),
+        }
+    }
+
+    fn about_to_wait(&mut self, _: &ActiveEventLoop) {
+        let app = self.vulkan.as_mut().unwrap();
+        let window = self.window.as_ref().unwrap();
+
+        if app.dirty_swapchain {
+            let size = window.inner_size();
+            if size.width > 0 && size.height > 0 {
+                app.recreate_swapchain();
+            } else {
+                return;
+            }
+        }
+        app.dirty_swapchain = app.draw_frame();
+    }
+
+    fn exiting(&mut self, _: &ActiveEventLoop) {
+        self.vulkan.as_ref().unwrap().wait_gpu_idle();
+    }
 }
 
 struct VulkanApp {
@@ -136,6 +129,8 @@ struct VulkanApp {
     cursor_position: [i32; 2],
     cursor_delta: Option<[i32; 2]>,
     wheel_delta: Option<f32>,
+
+    dirty_swapchain: bool,
 
     vk_context: VkContext,
     queue_families_indices: QueueFamiliesIndices,
@@ -318,6 +313,7 @@ impl VulkanApp {
             cursor_position: [0, 0],
             cursor_delta: None,
             wheel_delta: None,
+            dirty_swapchain: false,
             vk_context,
             queue_families_indices,
             graphics_queue,
