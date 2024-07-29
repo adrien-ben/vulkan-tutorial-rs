@@ -100,7 +100,7 @@ impl SwapchainSupportDetails {
         capabilities: vk::SurfaceCapabilitiesKHR,
         preferred_dimensions: [u32; 2],
     ) -> vk::Extent2D {
-        if capabilities.current_extent.width != std::u32::MAX {
+        if capabilities.current_extent.width != u32::MAX {
             return capabilities.current_extent;
         }
 

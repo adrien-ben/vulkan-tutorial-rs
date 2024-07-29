@@ -2079,14 +2079,14 @@ impl VulkanApp {
         unsafe {
             self.vk_context
                 .device()
-                .wait_for_fences(&wait_fences, true, std::u64::MAX)
+                .wait_for_fences(&wait_fences, true, u64::MAX)
                 .unwrap()
         };
 
         let result = unsafe {
             self.swapchain.acquire_next_image(
                 self.swapchain_khr,
-                std::u64::MAX,
+                u64::MAX,
                 image_available_semaphore,
                 vk::Fence::null(),
             )
