@@ -384,13 +384,16 @@ impl VulkanApp {
         } else {
             vk::InstanceCreateFlags::default()
         };
+        let mut debug_create_info = create_debug_create_info();
         let mut instance_create_info = vk::InstanceCreateInfo::default()
             .application_info(&app_info)
             .enabled_extension_names(&extension_names)
             .flags(create_flags);
         if ENABLE_VALIDATION_LAYERS {
             check_validation_layer_support(entry);
-            instance_create_info = instance_create_info.enabled_layer_names(&layer_names_ptrs);
+            instance_create_info = instance_create_info
+                .enabled_layer_names(&layer_names_ptrs)
+                .push_next(&mut debug_create_info);
         }
 
         unsafe { entry.create_instance(&instance_create_info, None).unwrap() }
