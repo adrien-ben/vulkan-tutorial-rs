@@ -42,8 +42,8 @@ fn main() {
 
 #[derive(Default)]
 struct App {
-    window: Option<Window>,
     vulkan: Option<VulkanApp>,
+    window: Option<Window>,
 }
 
 impl ApplicationHandler for App {
