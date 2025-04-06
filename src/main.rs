@@ -72,8 +72,13 @@ impl ApplicationHandler for App {
             WindowEvent::CloseRequested => {
                 event_loop.exit();
             }
-            WindowEvent::Resized { .. } => {
-                self.vulkan.as_mut().unwrap().dirty_swapchain = true;
+            WindowEvent::Resized(new_dimensions) => {
+                let vulkan_app = self.vulkan.as_mut().unwrap();
+                if new_dimensions.width != vulkan_app.swapchain_properties.extent.width
+                    || new_dimensions.height != vulkan_app.swapchain_properties.extent.height
+                {
+                    vulkan_app.dirty_swapchain = true;
+                }
             }
             WindowEvent::MouseInput { button, state, .. } => {
                 self.vulkan.as_mut().unwrap().is_left_clicked =
@@ -106,6 +111,7 @@ impl ApplicationHandler for App {
         if app.dirty_swapchain {
             let size = window.inner_size();
             if size.width > 0 && size.height > 0 {
+                app.resize_dimensions = [size.width, size.height];
                 app.recreate_swapchain();
             } else {
                 return;
@@ -120,7 +126,7 @@ impl ApplicationHandler for App {
 }
 
 struct VulkanApp {
-    resize_dimensions: Option<[u32; 2]>,
+    resize_dimensions: [u32; 2],
 
     camera: Camera,
     is_left_clicked: bool,
@@ -305,7 +311,7 @@ impl VulkanApp {
         let in_flight_frames = Self::create_sync_objects(vk_context.device());
 
         Self {
-            resize_dimensions: None,
+            resize_dimensions: [WIDTH, HEIGHT],
             camera: Default::default(),
             is_left_clicked: false,
             cursor_position: [0, 0],
@@ -2126,10 +2132,7 @@ impl VulkanApp {
 
         let device = self.vk_context.device();
 
-        let dimensions = self.resize_dimensions.unwrap_or([
-            self.swapchain_properties.extent.width,
-            self.swapchain_properties.extent.height,
-        ]);
+        let dimensions = self.resize_dimensions;
         let (swapchain, swapchain_khr, properties, images) = Self::create_swapchain_and_images(
             &self.vk_context,
             self.queue_families_indices,
