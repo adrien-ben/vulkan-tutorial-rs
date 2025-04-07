@@ -73,7 +73,19 @@ pub fn setup_debug_messenger(
         return None;
     }
 
-    let create_info = vk::DebugUtilsMessengerCreateInfoEXT::default()
+    let create_info = create_debug_create_info();
+    let debug_utils = debug_utils::Instance::new(entry, instance);
+    let debug_utils_messenger = unsafe {
+        debug_utils
+            .create_debug_utils_messenger(&create_info, None)
+            .unwrap()
+    };
+
+    Some((debug_utils, debug_utils_messenger))
+}
+
+pub fn create_debug_create_info() -> vk::DebugUtilsMessengerCreateInfoEXT<'static> {
+    vk::DebugUtilsMessengerCreateInfoEXT::default()
         .flags(vk::DebugUtilsMessengerCreateFlagsEXT::empty())
         .message_severity(
             vk::DebugUtilsMessageSeverityFlagsEXT::ERROR
@@ -85,13 +97,5 @@ pub fn setup_debug_messenger(
                 | vk::DebugUtilsMessageTypeFlagsEXT::VALIDATION
                 | vk::DebugUtilsMessageTypeFlagsEXT::PERFORMANCE,
         )
-        .pfn_user_callback(Some(vulkan_debug_callback));
-    let debug_utils = debug_utils::Instance::new(entry, instance);
-    let debug_utils_messenger = unsafe {
-        debug_utils
-            .create_debug_utils_messenger(&create_info, None)
-            .unwrap()
-    };
-
-    Some((debug_utils, debug_utils_messenger))
+        .pfn_user_callback(Some(vulkan_debug_callback))
 }
