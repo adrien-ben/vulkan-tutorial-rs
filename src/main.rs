@@ -8,9 +8,10 @@ mod texture;
 
 use crate::{camera::*, context::*, debug::*, swapchain::*, texture::*};
 use ash::{
+    Device, Entry, Instance,
     ext::debug_utils,
     khr::{surface, swapchain as khr_swapchain},
-    vk, Device, Entry, Instance,
+    vk,
 };
 use cgmath::{Deg, Matrix4, Point3, Vector3};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};

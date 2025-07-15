@@ -1,4 +1,4 @@
-use ash::{ext::debug_utils, vk, Entry, Instance};
+use ash::{Entry, Instance, ext::debug_utils, vk};
 use std::{
     ffi::{CStr, CString},
     os::raw::{c_char, c_void},
@@ -17,16 +17,18 @@ unsafe extern "system" fn vulkan_debug_callback(
     p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
     _: *mut c_void,
 ) -> vk::Bool32 {
-    use vk::DebugUtilsMessageSeverityFlagsEXT as Flag;
+    unsafe {
+        use vk::DebugUtilsMessageSeverityFlagsEXT as Flag;
 
-    let message = CStr::from_ptr((*p_callback_data).p_message);
-    match flag {
-        Flag::VERBOSE => log::debug!("{:?} - {:?}", typ, message),
-        Flag::INFO => log::info!("{:?} - {:?}", typ, message),
-        Flag::WARNING => log::warn!("{:?} - {:?}", typ, message),
-        _ => log::error!("{:?} - {:?}", typ, message),
+        let message = CStr::from_ptr((*p_callback_data).p_message);
+        match flag {
+            Flag::VERBOSE => log::debug!("{:?} - {:?}", typ, message),
+            Flag::INFO => log::info!("{:?} - {:?}", typ, message),
+            Flag::WARNING => log::warn!("{:?} - {:?}", typ, message),
+            _ => log::error!("{:?} - {:?}", typ, message),
+        }
+        vk::FALSE
     }
-    vk::FALSE
 }
 
 /// Get the pointers to the validation layers names.

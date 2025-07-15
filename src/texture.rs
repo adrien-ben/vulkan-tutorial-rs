@@ -1,4 +1,4 @@
-use ash::{vk, Device};
+use ash::{Device, vk};
 
 #[derive(Clone, Copy)]
 pub struct Texture {
